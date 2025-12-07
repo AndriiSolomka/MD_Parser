@@ -405,27 +405,54 @@ export class PdfGeneratorService {
       doc.page.width - config.margins!.left - config.margins!.right;
     const colCount = element.headers.length || element.rows[0]?.length || 0;
     const colWidth = tableWidth / colCount;
-    const rowHeight = 25;
+    const minRowHeight = 25;
+    const cellPadding = 5;
 
     let startY = doc.y;
 
+    // Helper function to calculate row height based on cell content
+    const calculateRowHeight = (cells: string[]): number => {
+      let maxHeight = minRowHeight;
+
+      for (let i = 0; i < cells.length; i++) {
+        const textHeight = doc.heightOfString(cells[i], {
+          width: colWidth - cellPadding * 2,
+          align: "left",
+        });
+        const requiredHeight = textHeight + cellPadding * 2 + 4; // 4px for extra spacing
+        maxHeight = Math.max(maxHeight, requiredHeight);
+      }
+
+      return maxHeight;
+    };
+
+    // Calculate total table height
+    let totalTableHeight = 0;
+    if (element.headers.length > 0) {
+      totalTableHeight += calculateRowHeight(element.headers);
+    }
+    for (const row of element.rows) {
+      totalTableHeight += calculateRowHeight(row);
+    }
+
     // Check if table fits on page
-    const tableHeight = (element.rows.length + 1) * rowHeight;
-    if (startY + tableHeight > doc.page.height - config.margins!.bottom) {
+    if (startY + totalTableHeight > doc.page.height - config.margins!.bottom) {
       doc.addPage();
       startY = doc.y;
     }
 
     // Draw header
     if (element.headers.length > 0) {
+      const headerHeight = calculateRowHeight(element.headers);
+
       for (let i = 0; i < element.headers.length; i++) {
         const x = config.margins!.left + i * colWidth;
 
         // Cell background
-        doc.rect(x, startY, colWidth, rowHeight).fill("#f0f0f0");
+        doc.rect(x, startY, colWidth, headerHeight).fill("#f0f0f0");
 
         // Cell border
-        doc.rect(x, startY, colWidth, rowHeight).stroke("#cccccc");
+        doc.rect(x, startY, colWidth, headerHeight).stroke("#cccccc");
 
         // Cell text
         doc
@@ -434,17 +461,30 @@ export class PdfGeneratorService {
           .fontSize(config.fontSize!);
 
         const alignment = element.alignment?.[i] || "left";
-        doc.text(element.headers[i], x + 5, startY + 7, {
-          width: colWidth - 10,
+
+        // Save current Y position
+        const currentY = doc.y;
+
+        doc.text(element.headers[i], x + cellPadding, startY + cellPadding, {
+          width: colWidth - cellPadding * 2,
           align: alignment,
+          lineBreak: true,
+          height: headerHeight - cellPadding * 2,
+          ellipsis: false,
+          continued: false, // Explicitly end text continuation
         });
+
+        // Restore Y position
+        doc.y = currentY;
       }
 
-      startY += rowHeight;
+      startY += headerHeight;
     }
 
     // Draw rows
     for (const row of element.rows) {
+      const rowHeight = calculateRowHeight(row);
+
       for (let i = 0; i < row.length; i++) {
         const x = config.margins!.left + i * colWidth;
 
@@ -455,16 +495,31 @@ export class PdfGeneratorService {
         doc.fillColor("#000000").font("Helvetica").fontSize(config.fontSize!);
 
         const alignment = element.alignment?.[i] || "left";
-        doc.text(row[i], x + 5, startY + 7, {
-          width: colWidth - 10,
+
+        // Save current Y position
+        const currentY = doc.y;
+
+        doc.text(row[i], x + cellPadding, startY + cellPadding, {
+          width: colWidth - cellPadding * 2,
           align: alignment,
+          lineBreak: true,
+          height: rowHeight - cellPadding * 2,
+          ellipsis: false,
+          continued: false, // Explicitly end text continuation
         });
+
+        // Restore Y position
+        doc.y = currentY;
       }
 
       startY += rowHeight;
     }
 
+    // Update Y position to after the table
     doc.y = startY;
+
+    // Move cursor to a new position and reset x to left margin
+    doc.x = config.margins!.left;
     doc.moveDown(1);
   }
 
