@@ -90,7 +90,7 @@ export interface Document {
 }
 
 export interface PDFConfig {
-  pageSize?: "A4" | "Letter";
+  pageSize?: "A4" | "Letter" | "Legal";
   margins?: {
     top: number;
     bottom: number;
