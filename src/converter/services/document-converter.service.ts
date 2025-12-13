@@ -58,13 +58,9 @@ export class DocumentConverterService {
           break;
 
         case TokenType.LIST_ITEM: {
-          const listItems: ListItemToken[] = [];
-          const ordered = (token as ListItemToken).ordered;
-          while (i < tokens.length && tokens[i].type === TokenType.LIST_ITEM) {
-            listItems.push(tokens[i] as ListItemToken);
-            i++;
-          }
-          elements.push(this.convertList(listItems, ordered));
+          const { element, nextIndex } = this.processList(tokens, i);
+          elements.push(element);
+          i = nextIndex;
           break;
         }
 
@@ -74,12 +70,9 @@ export class DocumentConverterService {
           break;
 
         case TokenType.TABLE_ROW: {
-          const tableRows: TableRowToken[] = [];
-          while (i < tokens.length && tokens[i].type === TokenType.TABLE_ROW) {
-            tableRows.push(tokens[i] as TableRowToken);
-            i++;
-          }
-          elements.push(this.convertTable(tableRows));
+          const { element, nextIndex } = this.processTable(tokens, i);
+          elements.push(element);
+          i = nextIndex;
           break;
         }
 
@@ -116,6 +109,43 @@ export class DocumentConverterService {
     return {
       elements,
       metadata: this.extractMetadata(elements),
+    };
+  }
+
+  private processList(
+    tokens: Token[],
+    startIndex: number
+  ): { element: ListElement; nextIndex: number } {
+    const listItems: ListItemToken[] = [];
+    let i = startIndex;
+    const ordered = (tokens[i] as ListItemToken).ordered;
+
+    while (i < tokens.length && tokens[i].type === TokenType.LIST_ITEM) {
+      listItems.push(tokens[i] as ListItemToken);
+      i++;
+    }
+
+    return {
+      element: this.convertList(listItems, ordered),
+      nextIndex: i,
+    };
+  }
+
+  private processTable(
+    tokens: Token[],
+    startIndex: number
+  ): { element: TableElement; nextIndex: number } {
+    const tableRows: TableRowToken[] = [];
+    let i = startIndex;
+
+    while (i < tokens.length && tokens[i].type === TokenType.TABLE_ROW) {
+      tableRows.push(tokens[i] as TableRowToken);
+      i++;
+    }
+
+    return {
+      element: this.convertTable(tableRows),
+      nextIndex: i,
     };
   }
 
@@ -178,20 +208,10 @@ export class DocumentConverterService {
     let imageData: Buffer | undefined;
 
     try {
-      if (token.url.startsWith("http://") || token.url.startsWith("https://")) {
-        this.logger.debug(`Downloading image from ${token.url}`);
-        const response = await axios.get(token.url, {
-          responseType: "arraybuffer",
-          timeout: 10000,
-        });
-        imageData = Buffer.from(response.data);
+      if (this.isRemoteUrl(token.url)) {
+        imageData = await this.fetchRemoteImage(token.url);
       } else if (baseDir) {
-        const imagePath = path.resolve(baseDir, token.url);
-        if (fs.existsSync(imagePath)) {
-          imageData = fs.readFileSync(imagePath);
-        } else {
-          this.logger.warn(`Image file not found: ${imagePath}`);
-        }
+        imageData = this.readLocalImage(token.url, baseDir);
       }
     } catch (error: unknown) {
       const errorMessage =
@@ -205,6 +225,29 @@ export class DocumentConverterService {
       url: token.url,
       data: imageData,
     };
+  }
+
+  private isRemoteUrl(url: string): boolean {
+    return url.startsWith("http://") || url.startsWith("https://");
+  }
+
+  private async fetchRemoteImage(url: string): Promise<Buffer> {
+    this.logger.debug(`Downloading image from ${url}`);
+    const response = await axios.get(url, {
+      responseType: "arraybuffer",
+      timeout: 10000,
+    });
+    return Buffer.from(response.data);
+  }
+
+  private readLocalImage(url: string, baseDir: string): Buffer | undefined {
+    const imagePath = path.resolve(baseDir, url);
+    if (fs.existsSync(imagePath)) {
+      return fs.readFileSync(imagePath);
+    } else {
+      this.logger.warn(`Image file not found: ${imagePath}`);
+      return undefined;
+    }
   }
 
   private convertBlockquote(token: BlockquoteToken): BlockquoteElement {

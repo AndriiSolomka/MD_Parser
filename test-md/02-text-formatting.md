@@ -8,4 +8,4 @@ This is `inline code`.
 
 This is a paragraph with **bold**, *italic*, and `code` all mixed together.
 
-> A blockquote with **bold** and *italic* formatting.
+> A blockquote.

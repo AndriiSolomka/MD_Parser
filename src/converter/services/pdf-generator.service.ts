@@ -173,93 +173,114 @@ export class PdfGeneratorService {
       return;
     }
 
-    const sorted = [...formatting].sort((a, b) => a.start - b.start);
+    // 1. Identify hidden ranges (markers)
+    const hiddenRanges: { start: number; end: number }[] = [];
 
-    const segments: Array<{
-      text: string;
+    formatting.forEach((f) => {
+      const sub = text.substring(f.start, f.end);
+      if (f.type === "bold") {
+        if (sub.startsWith("**")) {
+          hiddenRanges.push({ start: f.start, end: f.start + 2 });
+          hiddenRanges.push({ start: f.end - 2, end: f.end });
+        } else if (sub.startsWith("__")) {
+          hiddenRanges.push({ start: f.start, end: f.start + 2 });
+          hiddenRanges.push({ start: f.end - 2, end: f.end });
+        }
+      } else if (f.type === "italic") {
+        if (sub.startsWith("*")) {
+          hiddenRanges.push({ start: f.start, end: f.start + 1 });
+          hiddenRanges.push({ start: f.end - 1, end: f.end });
+        } else if (sub.startsWith("_")) {
+          hiddenRanges.push({ start: f.start, end: f.start + 1 });
+          hiddenRanges.push({ start: f.end - 1, end: f.end });
+        }
+      } else if (f.type === "code") {
+        if (sub.startsWith("`")) {
+          hiddenRanges.push({ start: f.start, end: f.start + 1 });
+          hiddenRanges.push({ start: f.end - 1, end: f.end });
+        }
+      } else if (f.type === "link") {
+        const match = sub.match(/^\[(.*)\]\((.*)\)$/);
+        if (match) {
+          const textLen = match[1].length;
+          hiddenRanges.push({ start: f.start, end: f.start + 1 }); // [
+          hiddenRanges.push({ start: f.start + 1 + textLen, end: f.end }); // ](url)
+        }
+      }
+    });
+
+    // 2. Create segments
+    const points = new Set<number>([0, text.length]);
+    formatting.forEach((f) => {
+      points.add(f.start);
+      points.add(f.end);
+    });
+    hiddenRanges.forEach((r) => {
+      points.add(r.start);
+      points.add(r.end);
+    });
+
+    const sortedPoints = Array.from(points).sort((a, b) => a - b);
+
+    for (let i = 0; i < sortedPoints.length - 1; i++) {
+      const start = sortedPoints[i];
+      const end = sortedPoints[i + 1];
+      if (start >= end) continue;
+
+      // Check if hidden
+      const isHidden = hiddenRanges.some(
+        (r) => start >= r.start && end <= r.end
+      );
+      if (isHidden) continue;
+
+      const segmentText = text.substring(start, end);
+
+      // Determine styles
+      const activeFormats = formatting.filter(
+        (f) => f.start <= start && f.end >= end
+      );
+      const styles = {
+        bold: activeFormats.some((f) => f.type === "bold"),
+        italic: activeFormats.some((f) => f.type === "italic"),
+        code: activeFormats.some((f) => f.type === "code"),
+        link: activeFormats.find((f) => f.type === "link")?.url,
+      };
+
+      this.applyStyles(doc, styles);
+
+      doc.text(segmentText, {
+        continued: true,
+        link: styles.link,
+        underline: !!styles.link,
+      });
+    }
+
+    // Reset styles and end text
+    doc.font("Helvetica").fillColor("#000000").text("", { continued: false });
+  }
+
+  private applyStyles(
+    doc: PDFKit.PDFDocument,
+    styles: {
       bold?: boolean;
       italic?: boolean;
       code?: boolean;
       link?: string;
-    }> = [];
-
-    let lastPos = 0;
-
-    for (const format of sorted) {
-      if (format.start > lastPos) {
-        const plainText = text.substring(lastPos, format.start);
-        if (plainText) {
-          segments.push({ text: plainText });
-        }
-      }
-
-      let formattedText = text.substring(format.start, format.end);
-
-      if (format.type === "bold") {
-        formattedText = formattedText.replace(/^\*\*|\*\*$/g, "");
-        formattedText = formattedText.replace(/^__|__$/g, "");
-        segments.push({ text: formattedText, bold: true });
-      } else if (format.type === "italic") {
-        formattedText = formattedText.replace(/^\*|\*$/g, "");
-        formattedText = formattedText.replace(/^_|_$/g, "");
-        segments.push({ text: formattedText, italic: true });
-      } else if (format.type === "code") {
-        formattedText = formattedText.replace(/^`|`$/g, "");
-        segments.push({ text: formattedText, code: true });
-      } else if (format.type === "link") {
-        const linkMatch = formattedText.match(/\[([^\]]+)\]\(([^)]+)\)/);
-        if (linkMatch) {
-          segments.push({ text: linkMatch[1], link: linkMatch[2] });
-        } else {
-          segments.push({ text: formattedText });
-        }
-      }
-
-      lastPos = format.end;
     }
-
-    if (lastPos < text.length) {
-      const remaining = text.substring(lastPos);
-      if (remaining) {
-        segments.push({ text: remaining });
-      }
+  ): void {
+    if (styles.bold && styles.italic) {
+      doc.font("Helvetica-BoldOblique").fillColor("#000000");
+    } else if (styles.bold) {
+      doc.font("Helvetica-Bold").fillColor("#000000");
+    } else if (styles.italic) {
+      doc.font("Helvetica-Oblique").fillColor("#000000");
+    } else if (styles.code) {
+      doc.font("Courier").fillColor("#c7254e");
+    } else if (styles.link) {
+      doc.font("Helvetica").fillColor("#0066cc");
+    } else {
+      doc.font("Helvetica").fillColor("#000000");
     }
-
-    const currentFont = "Helvetica";
-    const currentSize = doc.page.width;
-
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      const isLast = i === segments.length - 1;
-
-      if (segment.bold) {
-        doc.font("Helvetica-Bold").fillColor("#000000");
-      } else if (segment.italic) {
-        doc.font("Helvetica-Oblique").fillColor("#000000");
-      } else if (segment.code) {
-        doc.font("Courier").fillColor("#c7254e");
-      } else if (segment.link) {
-        doc.font("Helvetica").fillColor("#0066cc");
-      } else {
-        doc.font("Helvetica").fillColor("#000000");
-      }
-
-      if (segment.link) {
-        doc.text(segment.text, {
-          continued: !isLast,
-          link: segment.link,
-          underline: true,
-        });
-      } else {
-        doc.text(segment.text, { continued: !isLast });
-      }
-    }
-
-    if (segments.length === 0) {
-      doc.text(text);
-    }
-
-    doc.font("Helvetica").fillColor("#000000");
   }
 
   private renderList(
