@@ -10,7 +10,6 @@ async function bootstrap() {
   await app.listen(port);
 
   logger.log(`Application is running on: http://localhost:${port}`);
-  logger.log(`Use CLI tool: npm run cli <input.md> [output.pdf]`);
 }
 
 bootstrap();

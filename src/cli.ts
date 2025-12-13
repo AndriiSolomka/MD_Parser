@@ -7,14 +7,6 @@ import { DocumentConverterService } from "./converter/services/document-converte
 import { PdfGeneratorService } from "./converter/services/pdf-generator.service";
 import { PDFConfig } from "./converter/types/document";
 
-/**
- * CLI Tool for Markdown to PDF Conversion
- *
- * Usage:
- *   ts-node src/cli.ts [options] <input.md>
- *   npm run cli -- [options] <input.md>
- */
-
 export interface CLIOptions {
   output?: string;
   config?: string;
@@ -104,7 +96,6 @@ export class MarkdownToPdfCLI {
 
   async convert(inputPath: string, options: CLIOptions = {}): Promise<void> {
     try {
-      // Validate input file
       if (!fs.existsSync(inputPath)) {
         console.error(`Error: Input file not found: ${inputPath}`);
         process.exit(1);
@@ -115,7 +106,6 @@ export class MarkdownToPdfCLI {
         process.exit(1);
       }
 
-      // Determine output path
       const finalOutputPath =
         options.output || inputPath.replace(/\.md$/, ".pdf");
       const baseDir = path.dirname(path.resolve(inputPath));
@@ -123,16 +113,13 @@ export class MarkdownToPdfCLI {
       console.log(`Converting: ${inputPath}`);
       console.log(`Output: ${finalOutputPath}`);
 
-      // Build PDF configuration
       let pdfConfig: Partial<PDFConfig> = {};
 
-      // Load from config file if specified
       if (options.config) {
         pdfConfig = this.loadConfig(options.config);
         console.log(`Loaded configuration from ${options.config}`);
       }
 
-      // Override with CLI options
       if (options.pageSize) {
         pdfConfig.pageSize = options.pageSize;
       }
@@ -151,12 +138,10 @@ export class MarkdownToPdfCLI {
         pdfConfig.lineHeight = options.lineHeight;
       }
 
-      // Handle page numbers
       if (options.noPageNumbers) {
         pdfConfig.showPageNumbers = false;
       }
 
-      // Log active settings
       if (pdfConfig.pageSize) console.log(`Page size: ${pdfConfig.pageSize}`);
       if (pdfConfig.margins) console.log(`Margins: ${pdfConfig.margins.top}pt`);
       if (pdfConfig.fontSize) console.log(`Font size: ${pdfConfig.fontSize}pt`);
@@ -165,21 +150,17 @@ export class MarkdownToPdfCLI {
       if (pdfConfig.showPageNumbers) console.log(`Page numbers: enabled`);
       console.log();
 
-      // Read markdown file
       const markdown = fs.readFileSync(inputPath, "utf-8");
       console.log(`✓ Read ${markdown.length} characters from ${inputPath}`);
 
-      // Parse markdown
       const tokens = this.parser.parse(markdown);
       console.log(`✓ Parsed ${tokens.length} tokens`);
 
-      // Convert to document
       const document = await this.converter.convert(tokens, baseDir);
       console.log(
         `✓ Converted to document with ${document.elements.length} elements`
       );
 
-      // Generate PDF with configuration
       await this.generator.generate(document, finalOutputPath, pdfConfig);
       console.log(`✓ Generated PDF: ${finalOutputPath}`);
 
@@ -246,7 +227,6 @@ Supported Markdown Features:
   }
 }
 
-// Main execution
 if (require.main === module) {
   const cli = new MarkdownToPdfCLI();
   const args = process.argv.slice(2);

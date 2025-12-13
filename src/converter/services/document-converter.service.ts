@@ -27,25 +27,11 @@ import axios from "axios";
 import * as fs from "fs";
 import * as path from "path";
 
-/**
- * DocumentConverterService
- *
- * Converts tokens from the parser into a structured document
- * that can be rendered to PDF. Groups related tokens (e.g., consecutive
- * list items become a single list element) and resolves images.
- */
 @Injectable()
 export class DocumentConverterService {
   private readonly logger = new Logger(DocumentConverterService.name);
 
-  /**
-   * Convert tokens to document structure
-   * @param tokens - Array of parsed tokens
-   * @param baseDir - Base directory for resolving relative image paths
-   * @returns Structured document ready for PDF generation
-   */
   async convert(tokens: Token[], baseDir?: string): Promise<Document> {
-    // Handle empty input
     if (!tokens || tokens.length === 0) {
       this.logger.debug("No tokens to convert");
       return {
@@ -72,7 +58,6 @@ export class DocumentConverterService {
           break;
 
         case TokenType.LIST_ITEM: {
-          // Group consecutive list items into a single list
           const listItems: ListItemToken[] = [];
           const ordered = (token as ListItemToken).ordered;
           while (i < tokens.length && tokens[i].type === TokenType.LIST_ITEM) {
@@ -89,7 +74,6 @@ export class DocumentConverterService {
           break;
 
         case TokenType.TABLE_ROW: {
-          // Group table rows into a single table
           const tableRows: TableRowToken[] = [];
           while (i < tokens.length && tokens[i].type === TokenType.TABLE_ROW) {
             tableRows.push(tokens[i] as TableRowToken);
@@ -120,7 +104,6 @@ export class DocumentConverterService {
           break;
 
         default:
-          // Skip unknown token types
           this.logger.warn(`Unknown token type: ${(token as Token).type}`);
           i++;
       }
@@ -136,9 +119,6 @@ export class DocumentConverterService {
     };
   }
 
-  /**
-   * Convert heading token to element
-   */
   private convertHeading(token: HeadingToken): HeadingElement {
     return {
       type: "heading",
@@ -149,9 +129,6 @@ export class DocumentConverterService {
     };
   }
 
-  /**
-   * Convert paragraph token to element
-   */
   private convertParagraph(token: ParagraphToken): ParagraphElement {
     return {
       type: "paragraph",
@@ -160,9 +137,6 @@ export class DocumentConverterService {
     };
   }
 
-  /**
-   * Convert list items to list element
-   */
   private convertList(tokens: ListItemToken[], ordered: boolean): ListElement {
     const items: ListItemElement[] = tokens.map((token) => ({
       text: token.text,
@@ -177,9 +151,6 @@ export class DocumentConverterService {
     };
   }
 
-  /**
-   * Convert code block token to element
-   */
   private convertCodeBlock(token: CodeBlockToken): CodeBlockElement {
     return {
       type: "code-block",
@@ -188,9 +159,6 @@ export class DocumentConverterService {
     };
   }
 
-  /**
-   * Convert table rows to table element
-   */
   private convertTable(tokens: TableRowToken[]): TableElement {
     const headerRow = tokens.find((t) => t.isHeader);
     const dataRows = tokens.filter((t) => !t.isHeader);
@@ -203,9 +171,6 @@ export class DocumentConverterService {
     };
   }
 
-  /**
-   * Convert image token to element and download image data
-   */
   private async convertImage(
     token: ImageToken,
     baseDir?: string
@@ -214,7 +179,6 @@ export class DocumentConverterService {
 
     try {
       if (token.url.startsWith("http://") || token.url.startsWith("https://")) {
-        // Download remote image
         this.logger.debug(`Downloading image from ${token.url}`);
         const response = await axios.get(token.url, {
           responseType: "arraybuffer",
@@ -222,7 +186,6 @@ export class DocumentConverterService {
         });
         imageData = Buffer.from(response.data);
       } else if (baseDir) {
-        // Load local image
         const imagePath = path.resolve(baseDir, token.url);
         if (fs.existsSync(imagePath)) {
           imageData = fs.readFileSync(imagePath);
@@ -244,9 +207,6 @@ export class DocumentConverterService {
     };
   }
 
-  /**
-   * Convert blockquote token to element
-   */
   private convertBlockquote(token: BlockquoteToken): BlockquoteElement {
     return {
       type: "blockquote",
@@ -255,18 +215,12 @@ export class DocumentConverterService {
     };
   }
 
-  /**
-   * Convert horizontal rule token to element
-   */
   private convertHorizontalRule(): HorizontalRuleElement {
     return {
       type: "horizontal-rule",
     };
   }
 
-  /**
-   * Generate ID from heading text (for potential TOC)
-   */
   private generateId(text: string): string {
     return text
       .toLowerCase()
@@ -274,9 +228,6 @@ export class DocumentConverterService {
       .replace(/^-|-$/g, "");
   }
 
-  /**
-   * Extract metadata from document (title from first heading)
-   */
   private extractMetadata(elements: Element[]): any {
     const firstHeading = elements.find(
       (el) => el.type === "heading"

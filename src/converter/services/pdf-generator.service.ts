@@ -16,20 +16,6 @@ import {
 import * as fs from "fs";
 import * as path from "path";
 
-/**
- * PDFGeneratorService
- *
- * Renders a document structure to PDF using PDFKit.
- * Handles all element types with proper formatting:
- * - Headings with different sizes
- * - Paragraphs with inline formatting (bold, italic, code, links)
- * - Lists (ordered and unordered)
- * - Code blocks with syntax highlighting background
- * - Tables with borders and alignment
- * - Images (embedded)
- * - Blockquotes
- * - Horizontal rules
- */
 @Injectable()
 export class PdfGeneratorService {
   private readonly logger = new Logger(PdfGeneratorService.name);
@@ -50,9 +36,6 @@ export class PdfGeneratorService {
     footerText: "",
   };
 
-  /**
-   * Generate PDF from document
-   */
   async generate(
     document: Document,
     outputPath: string,
@@ -62,7 +45,6 @@ export class PdfGeneratorService {
 
     return new Promise((resolve, reject) => {
       try {
-        // Ensure output directory exists
         const outputDir = path.dirname(outputPath);
         if (outputDir && !fs.existsSync(outputDir)) {
           fs.mkdirSync(outputDir, { recursive: true });
@@ -85,12 +67,10 @@ export class PdfGeneratorService {
         const writeStream = fs.createWriteStream(outputPath);
         doc.pipe(writeStream);
 
-        // Render all elements
         for (const element of document.elements) {
           this.renderElement(doc, element, finalConfig);
         }
 
-        // Add headers, footers, and page numbers
         this.addPageDetails(doc, finalConfig);
 
         doc.end();
@@ -107,9 +87,6 @@ export class PdfGeneratorService {
     });
   }
 
-  /**
-   * Render a single element
-   */
   private renderElement(
     doc: PDFKit.PDFDocument,
     element: Element,
@@ -143,9 +120,6 @@ export class PdfGeneratorService {
     }
   }
 
-  /**
-   * Render heading
-   */
   private renderHeading(
     doc: PDFKit.PDFDocument,
     element: HeadingElement,
@@ -164,7 +138,6 @@ export class PdfGeneratorService {
     const marginTop = element.level === 1 ? 20 : 15;
     const marginBottom = 10;
 
-    // Add spacing before heading
     if (doc.y > config.margins!.top) {
       doc.moveDown(marginTop / config.fontSize!);
     }
@@ -175,13 +148,9 @@ export class PdfGeneratorService {
 
     doc.moveDown(marginBottom / config.fontSize!);
 
-    // Reset font
     doc.font("Helvetica").fontSize(config.fontSize!);
   }
 
-  /**
-   * Render paragraph
-   */
   private renderParagraph(
     doc: PDFKit.PDFDocument,
     element: ParagraphElement,
@@ -194,10 +163,6 @@ export class PdfGeneratorService {
     doc.moveDown(1);
   }
 
-  /**
-   * Render text with inline formatting
-   * Uses a simpler approach that doesn't cause text overlap
-   */
   private renderTextWithFormatting(
     doc: PDFKit.PDFDocument,
     text: string,
@@ -208,10 +173,8 @@ export class PdfGeneratorService {
       return;
     }
 
-    // Sort formatting by start position
     const sorted = [...formatting].sort((a, b) => a.start - b.start);
 
-    // Build segments of text with their formatting
     const segments: Array<{
       text: string;
       bold?: boolean;
@@ -223,7 +186,6 @@ export class PdfGeneratorService {
     let lastPos = 0;
 
     for (const format of sorted) {
-      // Add plain text before this format
       if (format.start > lastPos) {
         const plainText = text.substring(lastPos, format.start);
         if (plainText) {
@@ -231,25 +193,20 @@ export class PdfGeneratorService {
         }
       }
 
-      // Extract and clean the formatted text
       let formattedText = text.substring(format.start, format.end);
 
       if (format.type === "bold") {
-        // Remove ** or __ markers
         formattedText = formattedText.replace(/^\*\*|\*\*$/g, "");
         formattedText = formattedText.replace(/^__|__$/g, "");
         segments.push({ text: formattedText, bold: true });
       } else if (format.type === "italic") {
-        // Remove * or _ markers
         formattedText = formattedText.replace(/^\*|\*$/g, "");
         formattedText = formattedText.replace(/^_|_$/g, "");
         segments.push({ text: formattedText, italic: true });
       } else if (format.type === "code") {
-        // Remove ` markers
         formattedText = formattedText.replace(/^`|`$/g, "");
         segments.push({ text: formattedText, code: true });
       } else if (format.type === "link") {
-        // Extract link text from [text](url)
         const linkMatch = formattedText.match(/\[([^\]]+)\]\(([^)]+)\)/);
         if (linkMatch) {
           segments.push({ text: linkMatch[1], link: linkMatch[2] });
@@ -261,7 +218,6 @@ export class PdfGeneratorService {
       lastPos = format.end;
     }
 
-    // Add remaining plain text
     if (lastPos < text.length) {
       const remaining = text.substring(lastPos);
       if (remaining) {
@@ -269,15 +225,13 @@ export class PdfGeneratorService {
       }
     }
 
-    // Render all segments
     const currentFont = "Helvetica";
-    const currentSize = doc.page.width; // Save current state
+    const currentSize = doc.page.width;
 
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
       const isLast = i === segments.length - 1;
 
-      // Set appropriate font/color
       if (segment.bold) {
         doc.font("Helvetica-Bold").fillColor("#000000");
       } else if (segment.italic) {
@@ -290,7 +244,6 @@ export class PdfGeneratorService {
         doc.font("Helvetica").fillColor("#000000");
       }
 
-      // Render the segment
       if (segment.link) {
         doc.text(segment.text, {
           continued: !isLast,
@@ -302,18 +255,13 @@ export class PdfGeneratorService {
       }
     }
 
-    // If no segments, just output empty line
     if (segments.length === 0) {
       doc.text(text);
     }
 
-    // Reset font
     doc.font("Helvetica").fillColor("#000000");
   }
 
-  /**
-   * Render list
-   */
   private renderList(
     doc: PDFKit.PDFDocument,
     element: ListElement,
@@ -328,13 +276,10 @@ export class PdfGeneratorService {
 
       doc.font("Helvetica").fontSize(config.fontSize!).fillColor("#000000");
 
-      // Render bullet/number and text on same conceptual line
-      // Calculate bullet width for proper text alignment
       const bulletWidth = doc.widthOfString(bullet + " ");
 
       doc.text(bullet + " ", itemIndent, doc.y, { continued: true });
 
-      // Render the item text (which may have formatting)
       if (item.formatting && item.formatting.length > 0) {
         this.renderTextWithFormatting(doc, item.text, item.formatting);
       } else {
@@ -347,9 +292,6 @@ export class PdfGeneratorService {
     doc.moveDown(0.5);
   }
 
-  /**
-   * Render code block
-   */
   private renderCodeBlock(
     doc: PDFKit.PDFDocument,
     element: CodeBlockElement,
@@ -363,24 +305,20 @@ export class PdfGeneratorService {
       config.margins!.right -
       2 * padding;
 
-    // Calculate height needed
     const lines = element.code.split("\n");
     const lineHeight = config.fontSize! * 1.2;
     const codeHeight = lines.length * lineHeight + 2 * padding;
 
-    // Check if we need a new page
     if (doc.y + codeHeight > doc.page.height - config.margins!.bottom) {
       doc.addPage();
     }
 
     const startY = doc.y;
 
-    // Draw background
     doc
       .rect(config.margins!.left, startY, codeWidth + 2 * padding, codeHeight)
       .fill(bgColor);
 
-    // Draw code
     doc
       .fillColor("#000000")
       .font("Courier")
@@ -396,13 +334,9 @@ export class PdfGeneratorService {
 
     doc.moveDown(1);
 
-    // Reset font
     doc.font("Helvetica").fontSize(config.fontSize!);
   }
 
-  /**
-   * Render table
-   */
   private renderTable(
     doc: PDFKit.PDFDocument,
     element: TableElement,
@@ -414,10 +348,8 @@ export class PdfGeneratorService {
     const minRowHeight = 25;
     const cellPadding = 5;
 
-    // Calculate column widths
     const colWidths = new Array(colCount).fill(0);
 
-    // Measure headers
     doc.font("Helvetica-Bold").fontSize(config.fontSize!);
     element.headers.forEach((header, i) => {
       if (i < colCount) {
@@ -426,7 +358,6 @@ export class PdfGeneratorService {
       }
     });
 
-    // Measure rows
     doc.font("Helvetica").fontSize(config.fontSize!);
     element.rows.forEach((row) => {
       row.forEach((cell, i) => {
@@ -437,19 +368,16 @@ export class PdfGeneratorService {
       });
     });
 
-    // Ensure no column has 0 width (if empty)
     for (let i = 0; i < colCount; i++) {
-      if (colWidths[i] === 0) colWidths[i] = 50; // Default min width
+      if (colWidths[i] === 0) colWidths[i] = 50;
     }
 
-    // Scale widths to fit tableWidth
     const totalContentWidth = colWidths.reduce((sum, w) => sum + w, 0);
     const scaleFactor = tableWidth / totalContentWidth;
     const finalColWidths = colWidths.map((w) => w * scaleFactor);
 
     let startY = doc.y;
 
-    // Helper function to calculate row height based on cell content
     const calculateRowHeight = (cells: string[]): number => {
       let maxHeight = minRowHeight;
 
@@ -467,7 +395,6 @@ export class PdfGeneratorService {
       return maxHeight;
     };
 
-    // Calculate total table height
     let totalTableHeight = 0;
     if (element.headers.length > 0) {
       doc.font("Helvetica-Bold").fontSize(config.fontSize!);
@@ -479,13 +406,11 @@ export class PdfGeneratorService {
       totalTableHeight += calculateRowHeight(row);
     }
 
-    // Check if table fits on page
     if (startY + totalTableHeight > doc.page.height - config.margins!.bottom) {
       doc.addPage();
       startY = doc.y;
     }
 
-    // Helper to get X position
     const getColX = (index: number) => {
       let x = config.margins!.left;
       for (let i = 0; i < index; i++) {
@@ -494,7 +419,6 @@ export class PdfGeneratorService {
       return x;
     };
 
-    // Draw header
     if (element.headers.length > 0) {
       const headerHeight = calculateRowHeight(element.headers);
 
@@ -502,13 +426,10 @@ export class PdfGeneratorService {
         const x = getColX(i);
         const width = finalColWidths[i];
 
-        // Cell background
         doc.rect(x, startY, width, headerHeight).fill("#f0f0f0");
 
-        // Cell border
         doc.rect(x, startY, width, headerHeight).stroke("#cccccc");
 
-        // Cell text
         doc
           .fillColor("#000000")
           .font("Helvetica-Bold")
@@ -533,7 +454,6 @@ export class PdfGeneratorService {
       startY += headerHeight;
     }
 
-    // Draw rows
     for (const row of element.rows) {
       const rowHeight = calculateRowHeight(row);
 
@@ -541,10 +461,8 @@ export class PdfGeneratorService {
         const x = getColX(i);
         const width = finalColWidths[i];
 
-        // Cell border
         doc.rect(x, startY, width, rowHeight).stroke("#cccccc");
 
-        // Cell text
         doc.fillColor("#000000").font("Helvetica").fontSize(config.fontSize!);
 
         const alignment = element.alignment?.[i] || "left";
@@ -566,17 +484,12 @@ export class PdfGeneratorService {
       startY += rowHeight;
     }
 
-    // Update Y position to after the table
     doc.y = startY;
 
-    // Move cursor to a new position and reset x to left margin
     doc.x = config.margins!.left;
     doc.moveDown(1);
   }
 
-  /**
-   * Render image
-   */
   private renderImage(
     doc: PDFKit.PDFDocument,
     element: ImageElement,
@@ -617,9 +530,6 @@ export class PdfGeneratorService {
     }
   }
 
-  /**
-   * Render blockquote
-   */
   private renderBlockquote(
     doc: PDFKit.PDFDocument,
     element: BlockquoteElement,
@@ -631,14 +541,12 @@ export class PdfGeneratorService {
     const startY = doc.y;
     const startX = config.margins!.left + indent;
 
-    // Draw left border
     doc
       .moveTo(startX - 10, startY)
       .lineTo(startX - 10, doc.y + 20)
       .lineWidth(borderWidth)
       .stroke("#cccccc");
 
-    // Draw text
     doc.x = startX;
     doc
       .font("Helvetica-Oblique")
@@ -649,13 +557,9 @@ export class PdfGeneratorService {
 
     doc.moveDown(1);
 
-    // Reset
     doc.font("Helvetica").fillColor("#000000");
   }
 
-  /**
-   * Render horizontal rule
-   */
   private renderHorizontalRule(
     doc: PDFKit.PDFDocument,
     config: PDFConfig
@@ -673,9 +577,6 @@ export class PdfGeneratorService {
     doc.moveDown(0.5);
   }
 
-  /**
-   * Add headers, footers, and page numbers to all pages
-   */
   private addPageDetails(doc: PDFKit.PDFDocument, config: PDFConfig): void {
     const range = doc.bufferedPageRange();
     const totalPages = range.count;
@@ -683,11 +584,9 @@ export class PdfGeneratorService {
     for (let i = 0; i < totalPages; i++) {
       doc.switchToPage(i);
 
-      // Save current margins and set to 0 to allow writing in header/footer
       const oldMargins = { ...doc.page.margins };
       doc.page.margins = { top: 0, bottom: 0, left: 0, right: 0 };
 
-      // Add Header
       if (config.headerText) {
         doc
           .fontSize(10)
@@ -705,7 +604,6 @@ export class PdfGeneratorService {
           );
       }
 
-      // Add Footer
       if (config.footerText) {
         doc
           .fontSize(10)
@@ -723,7 +621,6 @@ export class PdfGeneratorService {
           );
       }
 
-      // Add Page Numbers
       if (config.showPageNumbers) {
         const pageText = `${i + 1} / ${totalPages}`;
         let align: "center" | "right" | "left" = "center";
@@ -747,7 +644,6 @@ export class PdfGeneratorService {
           );
       }
 
-      // Restore margins
       doc.page.margins = oldMargins;
     }
   }

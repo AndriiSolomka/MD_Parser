@@ -1,7 +1,3 @@
-/**
- * Token types for markdown parsing
- */
-
 export enum TokenType {
   HEADING = "HEADING",
   PARAGRAPH = "PARAGRAPH",
@@ -18,12 +14,12 @@ export interface InlineFormat {
   type: "bold" | "italic" | "code" | "link";
   start: number;
   end: number;
-  url?: string; // For links
+  url?: string;
 }
 
 export interface BaseToken {
   type: TokenType;
-  line?: number; // Line number in source
+  line?: number;
 }
 
 export interface HeadingToken extends BaseToken {
@@ -43,7 +39,7 @@ export interface ListItemToken extends BaseToken {
   type: TokenType.LIST_ITEM;
   ordered: boolean;
   text: string;
-  level: number; // Indentation level
+  level: number;
   formatting?: InlineFormat[];
 }
 

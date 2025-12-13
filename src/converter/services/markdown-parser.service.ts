@@ -13,36 +13,11 @@ import {
   InlineFormat,
 } from "../types/tokens";
 
-/**
- * MarkdownParserService
- *
- * Parses raw markdown text into a list of tokens.
- * Supports CommonMark syntax including:
- * - Headings (# to ######)
- * - Bold (**text** or __text__)
- * - Italic (*text* or _text_)
- * - Bold+Italic (***text*** or ___text___)
- * - Inline code (`code`)
- * - Code blocks (```language)
- * - Unordered lists (-, *, +)
- * - Ordered lists (1. 2. 3.)
- * - Links ([text](url))
- * - Images (![alt](url))
- * - Tables (pipe-separated with alignment)
- * - Blockquotes (> text)
- * - Horizontal rules (---, ***, ___)
- */
 @Injectable()
 export class MarkdownParserService {
   private readonly logger = new Logger(MarkdownParserService.name);
 
-  /**
-   * Parse markdown text into tokens
-   * @param markdown - Raw markdown string
-   * @returns Array of parsed tokens
-   */
   parse(markdown: string): Token[] {
-    // Handle empty or whitespace-only input
     if (!markdown || !markdown.trim()) {
       this.logger.debug("Empty markdown input received");
       return [];
@@ -52,7 +27,6 @@ export class MarkdownParserService {
     const tokens: Token[] = [];
     let currentLine = 0;
 
-    // State tracking
     let inCodeBlock = false;
     let codeBlockLines: string[] = [];
     let codeBlockLanguage: string | null = null;
@@ -64,9 +38,6 @@ export class MarkdownParserService {
     let tableAlignment: ("left" | "center" | "right")[] | undefined;
     let inTable = false;
 
-    /**
-     * Flush accumulated paragraph lines into a paragraph token
-     */
     const flushParagraph = (): void => {
       if (paragraphLines.length > 0) {
         const text = paragraphLines.join("\n").trim();
@@ -86,7 +57,6 @@ export class MarkdownParserService {
       const line = lines[currentLine];
       const trimmed = line.trim();
 
-      // ==================== CODE BLOCKS ====================
       if (trimmed.startsWith("```")) {
         flushParagraph();
         inTable = false;
@@ -113,14 +83,12 @@ export class MarkdownParserService {
         continue;
       }
 
-      // Inside code block - preserve everything as-is
       if (inCodeBlock) {
         codeBlockLines.push(line);
         currentLine++;
         continue;
       }
 
-      // ==================== EMPTY LINE ====================
       if (!trimmed) {
         flushParagraph();
         inTable = false;
@@ -128,7 +96,6 @@ export class MarkdownParserService {
         continue;
       }
 
-      // ==================== HORIZONTAL RULE ====================
       if (this.isHorizontalRule(trimmed)) {
         flushParagraph();
         inTable = false;
@@ -140,7 +107,6 @@ export class MarkdownParserService {
         continue;
       }
 
-      // ==================== HEADING ====================
       const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
       if (headingMatch) {
         flushParagraph();
@@ -158,7 +124,6 @@ export class MarkdownParserService {
         continue;
       }
 
-      // ==================== BLOCKQUOTE ====================
       if (trimmed.startsWith(">")) {
         flushParagraph();
         inTable = false;
@@ -173,7 +138,6 @@ export class MarkdownParserService {
         continue;
       }
 
-      // ==================== UNORDERED LIST ====================
       const unorderedMatch = trimmed.match(/^([*\-+])\s+(.+)$/);
       if (unorderedMatch) {
         flushParagraph();
@@ -194,7 +158,6 @@ export class MarkdownParserService {
         continue;
       }
 
-      // ==================== ORDERED LIST ====================
       const orderedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
       if (orderedMatch) {
         flushParagraph();
@@ -215,7 +178,6 @@ export class MarkdownParserService {
         continue;
       }
 
-      // ==================== IMAGE (standalone) ====================
       const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
       if (imageMatch) {
         flushParagraph();
@@ -230,15 +192,12 @@ export class MarkdownParserService {
         continue;
       }
 
-      // ==================== TABLE ====================
       if (trimmed.includes("|")) {
-        // Check if next line is a separator (indicates table header)
         const nextLine =
           currentLine + 1 < lines.length ? lines[currentLine + 1].trim() : "";
         const isSeparator = this.isTableSeparator(nextLine);
 
         if (isSeparator && !inTable) {
-          // This is a table header row
           flushParagraph();
           const cells = this.parseTableRow(trimmed);
           tableAlignment = this.parseTableAlignment(nextLine);
@@ -249,11 +208,10 @@ export class MarkdownParserService {
             alignment: tableAlignment,
             line: currentLine,
           } as TableRowToken);
-          currentLine += 2; // Skip header and separator
+          currentLine += 2;
           inTable = true;
           continue;
         } else if (inTable) {
-          // Table data row
           const cells = this.parseTableRow(trimmed);
           tokens.push({
             type: TokenType.TABLE_ROW,
@@ -267,7 +225,6 @@ export class MarkdownParserService {
         }
       }
 
-      // ==================== PARAGRAPH (default) ====================
       inTable = false;
       if (paragraphLines.length === 0) {
         paragraphStartLine = currentLine;
@@ -276,7 +233,6 @@ export class MarkdownParserService {
       currentLine++;
     }
 
-    // Handle unclosed code block at end of file
     if (inCodeBlock && codeBlockLines.length > 0) {
       tokens.push({
         type: TokenType.CODE_BLOCK,
@@ -286,19 +242,12 @@ export class MarkdownParserService {
       } as CodeBlockToken);
     }
 
-    // Flush any remaining paragraph content
     flushParagraph();
 
     this.logger.debug(`Parsed ${tokens.length} tokens from markdown`);
     return tokens;
   }
 
-  /**
-   * Extract inline formatting (bold, italic, code, links) from text.
-   * Handles nested formatting like ***bold italic***.
-   * @param text - Text to analyze
-   * @returns Array of inline format descriptors
-   */
   private extractInlineFormatting(text: string): InlineFormat[] {
     const formats: InlineFormat[] = [];
 
@@ -347,9 +296,6 @@ export class MarkdownParserService {
     return this.deduplicateFormats(formats);
   }
 
-  /**
-   * Helper to extract formatting patterns
-   */
   private extractPattern(
     text: string,
     regex: RegExp,
@@ -366,13 +312,9 @@ export class MarkdownParserService {
     }
   }
 
-  /**
-   * Remove duplicate and fully overlapping format ranges
-   */
   private deduplicateFormats(formats: InlineFormat[]): InlineFormat[] {
     if (formats.length <= 1) return formats;
 
-    // Sort by start position, then by length (longer first)
     formats.sort((a, b) => {
       if (a.start !== b.start) return a.start - b.start;
       return b.end - b.start - (a.end - a.start);
@@ -380,7 +322,6 @@ export class MarkdownParserService {
 
     const result: InlineFormat[] = [];
     for (const format of formats) {
-      // Check if this format is already covered by an existing one
       const isDuplicate = result.some(
         (existing) =>
           existing.start === format.start &&
@@ -394,9 +335,6 @@ export class MarkdownParserService {
     return result;
   }
 
-  /**
-   * Check if line is a horizontal rule (---, ***, ___)
-   */
   private isHorizontalRule(line: string): boolean {
     const trimmed = line.trim();
     return (
@@ -406,21 +344,13 @@ export class MarkdownParserService {
     );
   }
 
-  /**
-   * Check if line is a table separator (| --- | --- |)
-   */
   private isTableSeparator(line: string): boolean {
     if (!line) return false;
-    // Must contain at least one pipe and dash pattern
     return /^\|?[\s]*:?-+:?[\s]*(\|[\s]*:?-+:?[\s]*)+\|?$/.test(line);
   }
 
-  /**
-   * Parse table row into cell contents
-   */
   private parseTableRow(line: string): string[] {
     let cleaned = line.trim();
-    // Remove leading pipe
     if (cleaned.startsWith("|")) {
       cleaned = cleaned.slice(1);
     }
@@ -431,10 +361,7 @@ export class MarkdownParserService {
     return cleaned.split("|").map((cell) => cell.trim());
   }
 
-  /**
-   * Parse table alignment from separator line
-   * :--- = left, :---: = center, ---: = right
-   */
+
   private parseTableAlignment(
     separatorLine: string
   ): ("left" | "center" | "right")[] {

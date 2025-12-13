@@ -1,7 +1,3 @@
-/**
- * Document structure types for PDF generation
- */
-
 export interface DocumentElement {
   type: string;
   id?: string;
