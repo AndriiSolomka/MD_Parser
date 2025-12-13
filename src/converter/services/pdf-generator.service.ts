@@ -256,7 +256,8 @@ export class PdfGeneratorService {
     }
 
     // Reset styles and end text
-    doc.font("Helvetica").fillColor("#000000").text("", { continued: false });
+    // Use a space to ensure the line is terminated and Y position is updated
+    doc.font("Helvetica").fillColor("#000000").text(" ", { continued: false });
   }
 
   private applyStyles(
@@ -289,25 +290,34 @@ export class PdfGeneratorService {
     config: PDFConfig
   ): void {
     const baseIndent = 20;
-    let counter = 1;
+    const counters = new Map<number, number>();
 
     for (const item of element.items) {
+      const level = item.level;
+      if (!counters.has(level)) counters.set(level, 1);
+
+      // Reset deeper levels
+      for (const k of counters.keys()) {
+        if (k > level) counters.delete(k);
+      }
+
+      const counter = counters.get(level)!;
       const bullet = element.ordered ? `${counter}.` : "•";
+      if (element.ordered) counters.set(level, counter + 1);
+
       const itemIndent = config.margins!.left + item.level * baseIndent;
 
       doc.font("Helvetica").fontSize(config.fontSize!).fillColor("#000000");
 
-      const bulletWidth = doc.widthOfString(bullet + " ");
-
+      // Render bullet
       doc.text(bullet + " ", itemIndent, doc.y, { continued: true });
 
+      // Render content
       if (item.formatting && item.formatting.length > 0) {
         this.renderTextWithFormatting(doc, item.text, item.formatting);
       } else {
         doc.text(item.text);
       }
-
-      if (element.ordered) counter++;
     }
 
     doc.moveDown(0.5);
@@ -326,7 +336,16 @@ export class PdfGeneratorService {
       config.margins!.right -
       2 * padding;
 
-    const lines = element.code.split("\n");
+    // Replace tree characters with ASCII equivalents for Courier font
+    const sanitizedCode = element.code
+      .replace(/├──/g, "|--")
+      .replace(/└──/g, "`--")
+      .replace(/│/g, "|")
+      .replace(/└/g, "`")
+      .replace(/├/g, "|")
+      .replace(/─/g, "-");
+
+    const lines = sanitizedCode.split("\n");
     const lineHeight = config.fontSize! * 1.2;
     const codeHeight = lines.length * lineHeight + 2 * padding;
 
@@ -348,7 +367,7 @@ export class PdfGeneratorService {
     doc.y = startY + padding;
     doc.x = config.margins!.left + padding;
 
-    doc.text(element.code, {
+    doc.text(sanitizedCode, {
       width: codeWidth,
       align: "left",
     });
