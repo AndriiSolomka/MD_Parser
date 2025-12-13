@@ -17,10 +17,12 @@ import { PDFConfig } from "./converter/types/document";
 
 interface CLIOptions {
   output?: string;
+  config?: string;
   pageSize?: "A4" | "Letter" | "Legal";
   margin?: number;
   fontSize?: number;
   lineHeight?: number;
+  noPageNumbers?: boolean;
   help?: boolean;
   version?: boolean;
 }
@@ -46,6 +48,8 @@ class MarkdownToPdfCLI {
 
       if (arg === "-o" && i + 1 < args.length) {
         options.output = args[++i];
+      } else if (arg === "--config" && i + 1 < args.length) {
+        options.config = args[++i];
       } else if (arg === "--page-size" && i + 1 < args.length) {
         const size = args[++i];
         if (size === "A4" || size === "Letter" || size === "Legal") {
@@ -62,6 +66,8 @@ class MarkdownToPdfCLI {
         options.fontSize = parseInt(args[++i], 10);
       } else if (arg === "--line-height" && i + 1 < args.length) {
         options.lineHeight = parseFloat(args[++i]);
+      } else if (arg === "--no-page-numbers") {
+        options.noPageNumbers = true;
       } else if (arg === "-h" || arg === "--help") {
         options.help = true;
       } else if (arg === "--version") {
@@ -76,6 +82,24 @@ class MarkdownToPdfCLI {
     }
 
     return { options, inputPath };
+  }
+
+  private loadConfig(configPath: string): Partial<PDFConfig> {
+    try {
+      if (!fs.existsSync(configPath)) {
+        console.warn(`Warning: Config file not found: ${configPath}`);
+        return {};
+      }
+      const configContent = fs.readFileSync(configPath, "utf-8");
+      return JSON.parse(configContent);
+    } catch (error) {
+      console.error(
+        `Error loading config file: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return {};
+    }
   }
 
   async convert(inputPath: string, options: CLIOptions = {}): Promise<void> {
@@ -100,10 +124,17 @@ class MarkdownToPdfCLI {
       console.log(`Output: ${finalOutputPath}`);
 
       // Build PDF configuration
-      const pdfConfig: Partial<PDFConfig> = {};
+      let pdfConfig: Partial<PDFConfig> = {};
+
+      // Load from config file if specified
+      if (options.config) {
+        pdfConfig = this.loadConfig(options.config);
+        console.log(`Loaded configuration from ${options.config}`);
+      }
+
+      // Override with CLI options
       if (options.pageSize) {
         pdfConfig.pageSize = options.pageSize;
-        console.log(`Page size: ${options.pageSize}`);
       }
       if (options.margin !== undefined) {
         pdfConfig.margins = {
@@ -112,16 +143,26 @@ class MarkdownToPdfCLI {
           left: options.margin,
           right: options.margin,
         };
-        console.log(`Margins: ${options.margin}pt`);
       }
       if (options.fontSize) {
         pdfConfig.fontSize = options.fontSize;
-        console.log(`Font size: ${options.fontSize}pt`);
       }
       if (options.lineHeight) {
         pdfConfig.lineHeight = options.lineHeight;
-        console.log(`Line height: ${options.lineHeight}`);
       }
+
+      // Handle page numbers
+      if (options.noPageNumbers) {
+        pdfConfig.showPageNumbers = false;
+      }
+
+      // Log active settings
+      if (pdfConfig.pageSize) console.log(`Page size: ${pdfConfig.pageSize}`);
+      if (pdfConfig.margins) console.log(`Margins: ${pdfConfig.margins.top}pt`);
+      if (pdfConfig.fontSize) console.log(`Font size: ${pdfConfig.fontSize}pt`);
+      if (pdfConfig.lineHeight)
+        console.log(`Line height: ${pdfConfig.lineHeight}`);
+      if (pdfConfig.showPageNumbers) console.log(`Page numbers: enabled`);
       console.log();
 
       // Read markdown file
@@ -167,16 +208,19 @@ Usage:
 
 Options:
   -o <file>              Output file path
+  --config <file>        Load config from JSON file
   --page-size <size>     Page size (A4, Letter, Legal) [default: A4]
   --margin <n>           Set all margins to n points [default: 72]
   --font-size <n>        Base font size in points [default: 12]
   --line-height <n>      Line spacing multiplier [default: 1.5]
+  --no-page-numbers      Disable page numbers
   -h, --help             Show this help message
   --version              Show version number
 
 Examples:
   npm run cli -- document.md
   npm run cli -- document.md -o output.pdf
+  npm run cli -- document.md --config my-config.json
   npm run cli -- document.md --page-size Letter --margin 50
   npm run cli -- document.md --font-size 14 --line-height 1.8
   npm run cli -- document.md -o out.pdf --page-size Legal --margin 60

@@ -1,0 +1,13 @@
+{
+  "pageSize": "A4",
+  "margins": {
+    "top": 60,
+    "bottom": 60,
+    "left": 60,
+    "right": 60
+  },
+  "fontSize": 11,
+  "lineHeight": 1.6,
+  "showPageNumbers": true,
+  "headerText": "Course Work 2025 - Markdown Parser"
+}

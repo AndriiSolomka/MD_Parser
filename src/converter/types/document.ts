@@ -99,4 +99,8 @@ export interface PDFConfig {
   };
   fontSize?: number;
   lineHeight?: number;
+  showPageNumbers?: boolean;
+  pageNumberPosition?: "bottom-center" | "bottom-right" | "bottom-left";
+  headerText?: string;
+  footerText?: string;
 }

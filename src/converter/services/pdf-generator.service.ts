@@ -44,6 +44,10 @@ export class PdfGeneratorService {
     },
     fontSize: 12,
     lineHeight: 1.5,
+    showPageNumbers: false,
+    pageNumberPosition: "bottom-center",
+    headerText: "",
+    footerText: "",
   };
 
   /**
@@ -85,6 +89,9 @@ export class PdfGeneratorService {
         for (const element of document.elements) {
           this.renderElement(doc, element, finalConfig);
         }
+
+        // Add headers, footers, and page numbers
+        this.addPageDetails(doc, finalConfig);
 
         doc.end();
 
@@ -404,9 +411,41 @@ export class PdfGeneratorService {
     const tableWidth =
       doc.page.width - config.margins!.left - config.margins!.right;
     const colCount = element.headers.length || element.rows[0]?.length || 0;
-    const colWidth = tableWidth / colCount;
     const minRowHeight = 25;
     const cellPadding = 5;
+
+    // Calculate column widths
+    const colWidths = new Array(colCount).fill(0);
+
+    // Measure headers
+    doc.font("Helvetica-Bold").fontSize(config.fontSize!);
+    element.headers.forEach((header, i) => {
+      if (i < colCount) {
+        const width = doc.widthOfString(header) + cellPadding * 2;
+        colWidths[i] = Math.max(colWidths[i], width);
+      }
+    });
+
+    // Measure rows
+    doc.font("Helvetica").fontSize(config.fontSize!);
+    element.rows.forEach((row) => {
+      row.forEach((cell, i) => {
+        if (i < colCount) {
+          const width = doc.widthOfString(cell) + cellPadding * 2;
+          colWidths[i] = Math.max(colWidths[i], width);
+        }
+      });
+    });
+
+    // Ensure no column has 0 width (if empty)
+    for (let i = 0; i < colCount; i++) {
+      if (colWidths[i] === 0) colWidths[i] = 50; // Default min width
+    }
+
+    // Scale widths to fit tableWidth
+    const totalContentWidth = colWidths.reduce((sum, w) => sum + w, 0);
+    const scaleFactor = tableWidth / totalContentWidth;
+    const finalColWidths = colWidths.map((w) => w * scaleFactor);
 
     let startY = doc.y;
 
@@ -415,11 +454,13 @@ export class PdfGeneratorService {
       let maxHeight = minRowHeight;
 
       for (let i = 0; i < cells.length; i++) {
+        if (i >= colCount) continue;
+        const width = finalColWidths[i];
         const textHeight = doc.heightOfString(cells[i], {
-          width: colWidth - cellPadding * 2,
+          width: width - cellPadding * 2,
           align: "left",
         });
-        const requiredHeight = textHeight + cellPadding * 2 + 4; // 4px for extra spacing
+        const requiredHeight = textHeight + cellPadding * 2 + 4;
         maxHeight = Math.max(maxHeight, requiredHeight);
       }
 
@@ -429,8 +470,11 @@ export class PdfGeneratorService {
     // Calculate total table height
     let totalTableHeight = 0;
     if (element.headers.length > 0) {
+      doc.font("Helvetica-Bold").fontSize(config.fontSize!);
       totalTableHeight += calculateRowHeight(element.headers);
     }
+
+    doc.font("Helvetica").fontSize(config.fontSize!);
     for (const row of element.rows) {
       totalTableHeight += calculateRowHeight(row);
     }
@@ -441,18 +485,28 @@ export class PdfGeneratorService {
       startY = doc.y;
     }
 
+    // Helper to get X position
+    const getColX = (index: number) => {
+      let x = config.margins!.left;
+      for (let i = 0; i < index; i++) {
+        x += finalColWidths[i];
+      }
+      return x;
+    };
+
     // Draw header
     if (element.headers.length > 0) {
       const headerHeight = calculateRowHeight(element.headers);
 
       for (let i = 0; i < element.headers.length; i++) {
-        const x = config.margins!.left + i * colWidth;
+        const x = getColX(i);
+        const width = finalColWidths[i];
 
         // Cell background
-        doc.rect(x, startY, colWidth, headerHeight).fill("#f0f0f0");
+        doc.rect(x, startY, width, headerHeight).fill("#f0f0f0");
 
         // Cell border
-        doc.rect(x, startY, colWidth, headerHeight).stroke("#cccccc");
+        doc.rect(x, startY, width, headerHeight).stroke("#cccccc");
 
         // Cell text
         doc
@@ -462,19 +516,17 @@ export class PdfGeneratorService {
 
         const alignment = element.alignment?.[i] || "left";
 
-        // Save current Y position
         const currentY = doc.y;
 
         doc.text(element.headers[i], x + cellPadding, startY + cellPadding, {
-          width: colWidth - cellPadding * 2,
+          width: width - cellPadding * 2,
           align: alignment,
           lineBreak: true,
           height: headerHeight - cellPadding * 2,
           ellipsis: false,
-          continued: false, // Explicitly end text continuation
+          continued: false,
         });
 
-        // Restore Y position
         doc.y = currentY;
       }
 
@@ -486,29 +538,28 @@ export class PdfGeneratorService {
       const rowHeight = calculateRowHeight(row);
 
       for (let i = 0; i < row.length; i++) {
-        const x = config.margins!.left + i * colWidth;
+        const x = getColX(i);
+        const width = finalColWidths[i];
 
         // Cell border
-        doc.rect(x, startY, colWidth, rowHeight).stroke("#cccccc");
+        doc.rect(x, startY, width, rowHeight).stroke("#cccccc");
 
         // Cell text
         doc.fillColor("#000000").font("Helvetica").fontSize(config.fontSize!);
 
         const alignment = element.alignment?.[i] || "left";
 
-        // Save current Y position
         const currentY = doc.y;
 
         doc.text(row[i], x + cellPadding, startY + cellPadding, {
-          width: colWidth - cellPadding * 2,
+          width: width - cellPadding * 2,
           align: alignment,
           lineBreak: true,
           height: rowHeight - cellPadding * 2,
           ellipsis: false,
-          continued: false, // Explicitly end text continuation
+          continued: false,
         });
 
-        // Restore Y position
         doc.y = currentY;
       }
 
@@ -620,5 +671,84 @@ export class PdfGeneratorService {
       .stroke("#cccccc");
 
     doc.moveDown(0.5);
+  }
+
+  /**
+   * Add headers, footers, and page numbers to all pages
+   */
+  private addPageDetails(doc: PDFKit.PDFDocument, config: PDFConfig): void {
+    const range = doc.bufferedPageRange();
+    const totalPages = range.count;
+
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+
+      // Save current margins and set to 0 to allow writing in header/footer
+      const oldMargins = { ...doc.page.margins };
+      doc.page.margins = { top: 0, bottom: 0, left: 0, right: 0 };
+
+      // Add Header
+      if (config.headerText) {
+        doc
+          .fontSize(10)
+          .fillColor("#666666")
+          .text(
+            config.headerText,
+            config.margins!.left,
+            config.margins!.top / 2,
+            {
+              align: "center",
+              width:
+                doc.page.width - config.margins!.left - config.margins!.right,
+              lineBreak: false,
+            }
+          );
+      }
+
+      // Add Footer
+      if (config.footerText) {
+        doc
+          .fontSize(10)
+          .fillColor("#666666")
+          .text(
+            config.footerText,
+            config.margins!.left,
+            doc.page.height - config.margins!.bottom / 2,
+            {
+              align: "center",
+              width:
+                doc.page.width - config.margins!.left - config.margins!.right,
+              lineBreak: false,
+            }
+          );
+      }
+
+      // Add Page Numbers
+      if (config.showPageNumbers) {
+        const pageText = `${i + 1} / ${totalPages}`;
+        let align: "center" | "right" | "left" = "center";
+
+        if (config.pageNumberPosition === "bottom-right") align = "right";
+        else if (config.pageNumberPosition === "bottom-left") align = "left";
+
+        doc
+          .fontSize(10)
+          .fillColor("#666666")
+          .text(
+            pageText,
+            config.margins!.left,
+            doc.page.height - config.margins!.bottom / 2,
+            {
+              align,
+              width:
+                doc.page.width - config.margins!.left - config.margins!.right,
+              lineBreak: false,
+            }
+          );
+      }
+
+      // Restore margins
+      doc.page.margins = oldMargins;
+    }
   }
 }
