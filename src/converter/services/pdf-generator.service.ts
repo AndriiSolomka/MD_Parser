@@ -173,7 +173,6 @@ export class PdfGeneratorService {
       return;
     }
 
-    // 1. Identify hidden ranges (markers)
     const hiddenRanges: { start: number; end: number }[] = [];
 
     formatting.forEach((f) => {
@@ -203,13 +202,12 @@ export class PdfGeneratorService {
         const match = sub.match(/^\[(.*)\]\((.*)\)$/);
         if (match) {
           const textLen = match[1].length;
-          hiddenRanges.push({ start: f.start, end: f.start + 1 }); // [
-          hiddenRanges.push({ start: f.start + 1 + textLen, end: f.end }); // ](url)
+          hiddenRanges.push({ start: f.start, end: f.start + 1 });
+          hiddenRanges.push({ start: f.start + 1 + textLen, end: f.end });
         }
       }
     });
 
-    // 2. Create segments
     const points = new Set<number>([0, text.length]);
     formatting.forEach((f) => {
       points.add(f.start);
@@ -227,7 +225,6 @@ export class PdfGeneratorService {
       const end = sortedPoints[i + 1];
       if (start >= end) continue;
 
-      // Check if hidden
       const isHidden = hiddenRanges.some(
         (r) => start >= r.start && end <= r.end
       );
@@ -235,7 +232,6 @@ export class PdfGeneratorService {
 
       const segmentText = text.substring(start, end);
 
-      // Determine styles
       const activeFormats = formatting.filter(
         (f) => f.start <= start && f.end >= end
       );
@@ -255,8 +251,6 @@ export class PdfGeneratorService {
       });
     }
 
-    // Reset styles and end text
-    // Use a space to ensure the line is terminated and Y position is updated
     doc.font("Helvetica").fillColor("#000000").text(" ", { continued: false });
   }
 
@@ -309,10 +303,8 @@ export class PdfGeneratorService {
 
       doc.font("Helvetica").fontSize(config.fontSize!).fillColor("#000000");
 
-      // Render bullet
       doc.text(bullet + " ", itemIndent, doc.y, { continued: true });
 
-      // Render content
       if (item.formatting && item.formatting.length > 0) {
         this.renderTextWithFormatting(doc, item.text, item.formatting);
       } else {
@@ -336,7 +328,6 @@ export class PdfGeneratorService {
       config.margins!.right -
       2 * padding;
 
-    // Replace tree characters with ASCII equivalents for Courier font
     const sanitizedCode = element.code
       .replace(/├──/g, "|--")
       .replace(/└──/g, "`--")

@@ -83,7 +83,6 @@ export class MarkdownParserService {
 
       if (this.tryParseCodeBlock(state, trimmed)) continue;
 
-      // If line is empty, flush paragraph and continue
       if (!trimmed) {
         state.flushParagraph(this.extractInlineFormatting.bind(this));
         state.advance();
@@ -97,7 +96,6 @@ export class MarkdownParserService {
       if (this.tryParseImage(state, trimmed)) continue;
       if (this.tryParseTable(state, trimmed)) continue;
 
-      // If nothing matched, it's a paragraph line
       state.addToParagraph(line);
       state.advance();
     }
@@ -117,7 +115,7 @@ export class MarkdownParserService {
     const startLine = state.currentLineIndex;
     const codeLines: string[] = [];
 
-    state.advance(); // Skip opening fence
+    state.advance();
 
     while (state.hasMoreLines) {
       const line = state.currentLine;
@@ -128,14 +126,13 @@ export class MarkdownParserService {
           code: codeLines.join("\n"),
           line: startLine,
         } as CodeBlockToken);
-        state.advance(); // Skip closing fence
+        state.advance();
         return true;
       }
       codeLines.push(line);
       state.advance();
     }
 
-    // Unclosed code block
     state.addToken({
       type: TokenType.CODE_BLOCK,
       language,
@@ -276,9 +273,8 @@ export class MarkdownParserService {
         line: state.currentLineIndex,
       } as TableRowToken);
 
-      state.advance(2); // Skip header and separator
+      state.advance(2);
 
-      // Parse subsequent rows
       while (state.hasMoreLines) {
         const line = state.currentLine.trim();
         if (!line.includes("|") || this.isTableSeparator(line)) break;
@@ -302,17 +298,13 @@ export class MarkdownParserService {
   private extractInlineFormatting(text: string): InlineFormat[] {
     const formats: InlineFormat[] = [];
 
-    // Bold+Italic with *** (must check before bold/italic)
     this.extractPattern(text, /\*\*\*(.+?)\*\*\*/g, "bold", formats);
     this.extractPattern(text, /___(.+?)___/g, "bold", formats);
 
-    // Bold with **
     this.extractPattern(text, /\*\*(.+?)\*\*/g, "bold", formats);
 
-    // Bold with __
     this.extractPattern(text, /__(.+?)__/g, "bold", formats);
 
-    // Italic with * (not preceded/followed by *)
     this.extractPattern(
       text,
       /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g,
@@ -320,7 +312,6 @@ export class MarkdownParserService {
       formats
     );
 
-    // Italic with _ (not preceded/followed by _)
     this.extractPattern(
       text,
       /(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g,
@@ -328,10 +319,8 @@ export class MarkdownParserService {
       formats
     );
 
-    // Inline code with `
     this.extractPattern(text, /`([^`]+)`/g, "code", formats);
 
-    // Links [text](url)
     const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     let match;
     while ((match = linkRegex.exec(text)) !== null) {
@@ -343,7 +332,6 @@ export class MarkdownParserService {
       });
     }
 
-    // Remove duplicate/overlapping formats and sort
     return this.deduplicateFormats(formats);
   }
 
@@ -405,7 +393,7 @@ export class MarkdownParserService {
     if (cleaned.startsWith("|")) {
       cleaned = cleaned.slice(1);
     }
-    // Remove trailing pipe
+
     if (cleaned.endsWith("|")) {
       cleaned = cleaned.slice(0, -1);
     }
