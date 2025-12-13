@@ -15,7 +15,7 @@ import { PDFConfig } from "./converter/types/document";
  *   npm run cli -- [options] <input.md>
  */
 
-interface CLIOptions {
+export interface CLIOptions {
   output?: string;
   config?: string;
   pageSize?: "A4" | "Letter" | "Legal";
@@ -27,7 +27,7 @@ interface CLIOptions {
   version?: boolean;
 }
 
-class MarkdownToPdfCLI {
+export class MarkdownToPdfCLI {
   private parser: MarkdownParserService;
   private converter: DocumentConverterService;
   private generator: PdfGeneratorService;
@@ -247,30 +247,32 @@ Supported Markdown Features:
 }
 
 // Main execution
-const cli = new MarkdownToPdfCLI();
-const args = process.argv.slice(2);
+if (require.main === module) {
+  const cli = new MarkdownToPdfCLI();
+  const args = process.argv.slice(2);
 
-if (args.length === 0) {
-  cli.showHelp();
-  process.exit(0);
+  if (args.length === 0) {
+    cli.showHelp();
+    process.exit(0);
+  }
+
+  const { options, inputPath } = cli.parseArguments(args);
+
+  if (options.help) {
+    cli.showHelp();
+    process.exit(0);
+  }
+
+  if (options.version) {
+    cli.showVersion();
+    process.exit(0);
+  }
+
+  if (!inputPath) {
+    console.error("Error: No input file specified");
+    cli.showHelp();
+    process.exit(1);
+  }
+
+  cli.convert(inputPath, options);
 }
-
-const { options, inputPath } = cli.parseArguments(args);
-
-if (options.help) {
-  cli.showHelp();
-  process.exit(0);
-}
-
-if (options.version) {
-  cli.showVersion();
-  process.exit(0);
-}
-
-if (!inputPath) {
-  console.error("Error: No input file specified");
-  cli.showHelp();
-  process.exit(1);
-}
-
-cli.convert(inputPath, options);
