@@ -110,7 +110,15 @@ Visit [Google](https://google.com) for search.
 
 ---
 
-## 8. Some Text
+## 8. Images
+
+This image is loaded from the internet:
+
+![GitHub Logo](https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png)
+
+---
+
+## 9. Some Text
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
 

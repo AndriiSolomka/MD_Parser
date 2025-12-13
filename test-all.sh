@@ -19,7 +19,7 @@ for input in test-md/*.md; do
   
   echo "  Converting: $filename"
   
-  if npm run cli -- "$input" "$output" > /dev/null 2>&1; then
+  if npm run cli -- "$input" -o "$output" > /dev/null 2>&1; then
     echo "  ✅ Success: $output"
     ((success++))
   else
