@@ -11,6 +11,11 @@ describe("Benchmark Tests", () => {
   let generator: PdfGeneratorService;
 
   const testOutputDir = path.join(__dirname, "../../test-output-benchmark");
+  const benchmarkResults: any[] = [];
+  const benchmarkOutputFile = path.join(
+    __dirname,
+    "../../../benchmark-results.json"
+  );
 
   beforeAll(() => {
     parser = new MarkdownParserService();
@@ -23,6 +28,21 @@ describe("Benchmark Tests", () => {
   });
 
   afterAll(() => {
+    // Save benchmark results to JSON file
+    const timestamp = new Date().toISOString();
+    const data = {
+      timestamp,
+      results: benchmarkResults,
+      environment: {
+        node: process.version,
+        platform: process.platform,
+        arch: process.arch,
+      },
+    };
+
+    fs.writeFileSync(benchmarkOutputFile, JSON.stringify(data, null, 2));
+    console.log(`\n📊 Benchmark results saved to: ${benchmarkOutputFile}`);
+
     // Clean up test output
     if (fs.existsSync(testOutputDir)) {
       try {
@@ -48,6 +68,18 @@ describe("Benchmark Tests", () => {
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Parser",
+        test: "parse-1000-lines",
+        duration,
+        tokenCount: tokens.length,
+        inputSize: markdown.length,
+        threshold: 1000,
+        passed: duration < 1000,
+      });
+
       expect(duration).toBeLessThan(1000);
       expect(tokens.length).toBeGreaterThan(0);
     });
@@ -64,8 +96,21 @@ describe("Benchmark Tests", () => {
       const endTime = Date.now();
 
       const duration = endTime - startTime;
-      expect(duration).toBeLessThan(200);
       const tableTokens = tokens.filter((t) => t.type === TokenType.TABLE_ROW);
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Parser",
+        test: "parse-complex-table-50-rows",
+        duration,
+        tokenCount: tokens.length,
+        tableRowCount: tableTokens.length,
+        inputSize: markdown.length,
+        threshold: 200,
+        passed: duration < 200,
+      });
+
+      expect(duration).toBeLessThan(200);
       expect(tableTokens.length).toBe(51); // header + 50 rows
     });
 
@@ -81,6 +126,18 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Parser",
+        test: "parse-deeply-nested-formatting",
+        duration,
+        tokenCount: tokens.length,
+        inputSize: markdown.length,
+        threshold: 300,
+        passed: duration < 300,
+      });
+
       expect(duration).toBeLessThan(300);
       expect(tokens.length).toBeGreaterThan(0);
     });
@@ -96,8 +153,21 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
-      expect(duration).toBeLessThan(500);
       const codeBlocks = tokens.filter((t) => t.type === TokenType.CODE_BLOCK);
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Parser",
+        test: "parse-100-code-blocks",
+        duration,
+        tokenCount: tokens.length,
+        codeBlockCount: codeBlocks.length,
+        inputSize: markdown.length,
+        threshold: 500,
+        passed: duration < 500,
+      });
+
+      expect(duration).toBeLessThan(500);
       expect(codeBlocks.length).toBe(100);
     });
   });
@@ -119,6 +189,18 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Converter",
+        test: "convert-500-tokens",
+        duration,
+        tokenCount: tokens.length,
+        elementCount: document.elements.length,
+        threshold: 500,
+        passed: duration < 500,
+      });
+
       expect(duration).toBeLessThan(500);
       expect(document.elements.length).toBeGreaterThan(0);
     });
@@ -136,6 +218,18 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Converter",
+        test: "convert-large-table-100-rows",
+        duration,
+        tokenCount: tokens.length,
+        elementCount: document.elements.length,
+        threshold: 300,
+        passed: duration < 300,
+      });
+
       expect(duration).toBeLessThan(300);
       expect(document.elements.length).toBeGreaterThan(0);
     });
@@ -160,6 +254,17 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "PDF Generator",
+        test: "generate-pdf-200-elements",
+        duration,
+        elementCount: document.elements.length,
+        threshold: 2000,
+        passed: duration < 2000,
+      });
+
       expect(duration).toBeLessThan(2000);
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -180,6 +285,17 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "PDF Generator",
+        test: "generate-pdf-large-table",
+        duration,
+        elementCount: document.elements.length,
+        threshold: 1500,
+        passed: duration < 1500,
+      });
+
       expect(duration).toBeLessThan(1500);
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -206,6 +322,18 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Full Pipeline",
+        test: "full-pipeline-100-elements",
+        duration,
+        tokenCount: tokens.length,
+        elementCount: document.elements.length,
+        threshold: 3000,
+        passed: duration < 3000,
+      });
+
       expect(duration).toBeLessThan(3000);
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -228,6 +356,18 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Full Pipeline",
+        test: "process-1000-elements",
+        duration,
+        tokenCount: tokens.length,
+        elementCount: document.elements.length,
+        threshold: 5000,
+        passed: duration < 5000,
+      });
+
       expect(duration).toBeLessThan(5000);
       expect(document.elements.length).toBeGreaterThan(1000);
       expect(fs.existsSync(outputPath)).toBe(true);
@@ -256,6 +396,18 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
       const endTime = Date.now();
 
       const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Full Pipeline",
+        test: "mixed-content-document",
+        duration,
+        tokenCount: tokens.length,
+        elementCount: document.elements.length,
+        threshold: 2000,
+        passed: duration < 2000,
+      });
+
       expect(duration).toBeLessThan(2000);
       expect(fs.existsSync(outputPath)).toBe(true);
     });
@@ -268,11 +420,25 @@ ${"***Very deeply nested formatting*** ".repeat(100)}
         markdown += `Line ${i} with some **content**.\n`;
       }
 
+      const startTime = Date.now();
       const tokens = parser.parse(markdown);
       const document = await converter.convert(tokens);
       const outputPath = path.join(testOutputDir, "memory-test.pdf");
 
       await generator.generate(document, outputPath);
+      const endTime = Date.now();
+
+      const duration = endTime - startTime;
+
+      // Log benchmark result
+      benchmarkResults.push({
+        category: "Memory Efficiency",
+        test: "handle-5000-lines",
+        duration,
+        tokenCount: tokens.length,
+        elementCount: document.elements.length,
+        inputSize: markdown.length,
+      });
 
       expect(fs.existsSync(outputPath)).toBe(true);
       expect(tokens.length).toBeGreaterThan(0);

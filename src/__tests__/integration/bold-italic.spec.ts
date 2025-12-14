@@ -58,6 +58,11 @@ Comparison: **bold only**, *italic only*, and ***bold italic***.`;
     expect(pdfContent.text).toContain("another bold italic");
     expect(pdfContent.text).toContain("bold only");
     expect(pdfContent.text).toContain("italic only");
+
+    // FIXED: Verify that markdown markers are NOT visible in the PDF
+    expect(pdfContent.text).not.toContain("***");
+    expect(pdfContent.text).not.toContain("___");
+    expect(pdfContent.text).not.toContain("**");
   });
 
   it("should correctly parse ***text*** as bold-italic token", () => {
