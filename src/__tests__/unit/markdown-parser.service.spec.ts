@@ -213,6 +213,49 @@ Second paragraph`;
       expect(tokens).toHaveLength(3);
       expect((tokens[1] as any).level).toBeGreaterThan(0);
     });
+
+    it("should parse multi-line list items correctly", () => {
+      const markdown = `- First item
+    continued text
+- Second item`;
+      const tokens = service.parse(markdown);
+
+      expect(tokens).toHaveLength(2);
+      expect(tokens[0].type).toBe(TokenType.LIST_ITEM);
+      const item1 = tokens[0] as any;
+
+      // We expect the parser to handle the continuation line "continued text"
+      // as part of the first list item.
+      expect(item1.text).toContain("First item");
+      expect(item1.text).toContain("continued text");
+
+      // The second token should be the second list item
+      expect(tokens[1].type).toBe(TokenType.LIST_ITEM);
+      expect((tokens[1] as any).text).toBe("Second item");
+    });
+
+    it("should handle ordered multi-line list items", () => {
+      const markdown = `1. First numbered item
+    with continuation
+2. Second item`;
+      const tokens = service.parse(markdown);
+
+      expect(tokens).toHaveLength(2);
+      const item1 = tokens[0] as any;
+      expect(item1.text).toContain("First numbered item");
+      expect(item1.text).toContain("with continuation");
+      expect(item1.ordered).toBe(true);
+    });
+
+    it("should not treat insufficiently indented lines as continuations", () => {
+      const markdown = `- First item
+Not indented enough
+- Second item`;
+      const tokens = service.parse(markdown);
+
+      // "Not indented enough" should be a separate paragraph
+      expect(tokens.length).toBeGreaterThan(2);
+    });
   });
 
   describe("Code Blocks", () => {

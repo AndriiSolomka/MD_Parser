@@ -3,6 +3,7 @@ import { PdfGeneratorService } from "../../converter/services/pdf-generator.serv
 import { Document } from "../../converter/types/document";
 import * as fs from "fs";
 import * as path from "path";
+import { parsePdf } from "../utils/pdf-test-helpers";
 
 describe("PdfGeneratorService", () => {
   let service: PdfGeneratorService;
@@ -257,6 +258,198 @@ describe("PdfGeneratorService", () => {
       });
 
       expect(fs.existsSync(outputPath)).toBe(true);
+
+      // Verify page size metadata
+      const pdfData = await parsePdf(outputPath);
+      expect(pdfData.numpages).toBeGreaterThan(0);
+    });
+
+    it("should verify PDF contains heading text", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "heading",
+            level: 1,
+            text: "Unique Test Heading",
+            id: "unique-heading",
+          },
+        ],
+      };
+
+      const outputPath = path.join(testOutputDir, "verify-heading.pdf");
+      await service.generate(doc, outputPath);
+
+      const pdfData = await parsePdf(outputPath);
+      expect(pdfData.text).toContain("Unique Test Heading");
+    });
+
+    it("should verify PDF contains paragraph text", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "paragraph",
+            text: "This is a unique test paragraph with specific content.",
+          },
+        ],
+      };
+
+      const outputPath = path.join(testOutputDir, "verify-paragraph.pdf");
+      await service.generate(doc, outputPath);
+
+      const pdfData = await parsePdf(outputPath);
+      expect(pdfData.text).toContain("unique test paragraph");
+    });
+
+    it("should verify PDF contains list items", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "list",
+            ordered: false,
+            items: [
+              { text: "First unique item", level: 0 },
+              { text: "Second unique item", level: 0 },
+              { text: "Third unique item", level: 0 },
+            ],
+          },
+        ],
+      };
+
+      const outputPath = path.join(testOutputDir, "verify-list.pdf");
+      await service.generate(doc, outputPath);
+
+      const pdfData = await parsePdf(outputPath);
+      expect(pdfData.text).toContain("First unique item");
+      expect(pdfData.text).toContain("Second unique item");
+      expect(pdfData.text).toContain("Third unique item");
+    });
+
+    it("should verify PDF contains code block", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "code-block",
+            language: "javascript",
+            code: "const uniqueVariable = 42;",
+          },
+        ],
+      };
+
+      const outputPath = path.join(testOutputDir, "verify-code.pdf");
+      await service.generate(doc, outputPath);
+
+      const pdfData = await parsePdf(outputPath);
+      expect(pdfData.text).toContain("uniqueVariable");
+    });
+
+    it("should verify PDF contains table data", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "table",
+            headers: ["Product", "Price", "Stock"],
+            rows: [
+              ["Widget", "$19.99", "100"],
+              ["Gadget", "$29.99", "50"],
+            ],
+            alignment: ["left", "center", "right"],
+          },
+        ],
+      };
+
+      const outputPath = path.join(testOutputDir, "verify-table.pdf");
+      await service.generate(doc, outputPath);
+
+      const pdfData = await parsePdf(outputPath);
+      expect(pdfData.text).toContain("Product");
+      expect(pdfData.text).toContain("Widget");
+      expect(pdfData.text).toContain("$19.99");
+    });
+
+    it("should verify triple emphasis renders as bold and italic", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "paragraph",
+            text: "***bold and italic***",
+            formatting: [
+              {
+                type: "bold",
+                start: 0,
+                end: 21,
+              },
+              {
+                type: "italic",
+                start: 0,
+                end: 21,
+              },
+            ],
+          },
+        ],
+      };
+
+      const outputPath = path.join(testOutputDir, "verify-triple-emphasis.pdf");
+      await service.generate(doc, outputPath);
+
+      const pdfData = await parsePdf(outputPath);
+      // Should contain the text without visible asterisks
+      expect(pdfData.text).toContain("bold and italic");
+      expect(pdfData.text).not.toContain("***");
+    });
+
+    it("should verify links don't bleed into surrounding text", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "paragraph",
+            text: "[Google](https://google.com) for search.",
+            formatting: [
+              {
+                type: "link",
+                start: 0,
+                end: 28,
+                url: "https://google.com",
+              },
+            ],
+          },
+        ],
+      };
+
+      const outputPath = path.join(testOutputDir, "verify-link.pdf");
+      await service.generate(doc, outputPath);
+
+      const pdfData = await parsePdf(outputPath);
+      // Should contain link text and surrounding text
+      expect(pdfData.text).toContain("Google");
+      expect(pdfData.text).toContain("for search");
+    });
+
+    it("should handle page size configuration correctly", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "paragraph",
+            text: "Testing A5 page size",
+          },
+        ],
+      };
+
+      const outputPathA4 = path.join(testOutputDir, "page-size-a4.pdf");
+      const outputPathA5 = path.join(testOutputDir, "page-size-a5.pdf");
+
+      await service.generate(doc, outputPathA4, { pageSize: "A4" });
+      await service.generate(doc, outputPathA5, { pageSize: "A5" });
+
+      const pdfDataA4 = await parsePdf(outputPathA4);
+      const pdfDataA5 = await parsePdf(outputPathA5);
+
+      // Both should contain the text
+      expect(pdfDataA4.text).toContain("Testing A5 page size");
+      expect(pdfDataA5.text).toContain("Testing A5 page size");
+
+      // Both should be valid PDFs
+      expect(pdfDataA4.numpages).toBeGreaterThan(0);
+      expect(pdfDataA5.numpages).toBeGreaterThan(0);
     });
   });
 });

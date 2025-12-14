@@ -290,11 +290,32 @@ export class PdfGeneratorService {
 
       this.applyStyles(doc, styles);
 
+      const isLastSegment = i === sortedPoints.length - 2;
+
       doc.text(segmentText, {
-        continued: true,
+        continued: !isLastSegment,
         link: styles.link || null,
         underline: !!styles.link,
       });
+
+      // Reset link state between segments if the next segment doesn't have a link
+      // This prevents link bleeding into subsequent text
+      if (!isLastSegment && styles.link) {
+        const nextStart = sortedPoints[i + 1];
+        const nextEnd = sortedPoints[i + 2];
+
+        if (nextStart < text.length && nextEnd <= text.length) {
+          const nextActiveFormats = formatting.filter(
+            (f) => f.start <= nextStart && f.end >= nextEnd
+          );
+          const hasNextLink = nextActiveFormats.some((f) => f.type === "link");
+
+          if (!hasNextLink) {
+            // Close the link annotation by appending empty text without link
+            doc.text("", { continued: true, link: null });
+          }
+        }
+      }
     }
 
     doc.font("Helvetica").fillColor("#000000").text(" ", { continued: false });
