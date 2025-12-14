@@ -2,6 +2,7 @@ import * as fs from "fs";
 import { PDFParse, VerbosityLevel } from "pdf-parse";
 import type { TextResult, InfoResult } from "pdf-parse";
 import * as path from "path";
+import { PDFDocument } from "pdf-lib";
 
 export interface PdfContent {
   text: string;
@@ -206,4 +207,17 @@ export async function assertPdfContainsTableData(
       }
     }
   }
+}
+
+/**
+ * Get PDF page dimensions
+ */
+export async function getPdfPageDimensions(
+  filePath: string
+): Promise<{ width: number; height: number }> {
+  const dataBuffer = fs.readFileSync(filePath);
+  const pdfDoc = await PDFDocument.load(dataBuffer);
+  const page = pdfDoc.getPages()[0];
+  const { width, height } = page.getSize();
+  return { width, height };
 }

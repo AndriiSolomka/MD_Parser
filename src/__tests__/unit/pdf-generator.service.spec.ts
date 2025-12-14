@@ -3,7 +3,7 @@ import { PdfGeneratorService } from "../../converter/services/pdf-generator.serv
 import { Document } from "../../converter/types/document";
 import * as fs from "fs";
 import * as path from "path";
-import { parsePdf } from "../utils/pdf-test-helpers";
+import { parsePdf, getPdfPageDimensions } from "../utils/pdf-test-helpers";
 
 describe("PdfGeneratorService", () => {
   let service: PdfGeneratorService;
@@ -447,9 +447,17 @@ describe("PdfGeneratorService", () => {
       expect(pdfDataA4.text).toContain("Testing A5 page size");
       expect(pdfDataA5.text).toContain("Testing A5 page size");
 
-      // Both should be valid PDFs
-      expect(pdfDataA4.numpages).toBeGreaterThan(0);
-      expect(pdfDataA5.numpages).toBeGreaterThan(0);
+      // Check dimensions
+      const dimA4 = await getPdfPageDimensions(outputPathA4);
+      const dimA5 = await getPdfPageDimensions(outputPathA5);
+
+      // A4: 595.28 x 841.89
+      expect(dimA4.width).toBeCloseTo(595.28, 1);
+      expect(dimA4.height).toBeCloseTo(841.89, 1);
+
+      // A5: 419.53 x 595.28
+      expect(dimA5.width).toBeCloseTo(419.53, 1);
+      expect(dimA5.height).toBeCloseTo(595.28, 1);
     });
   });
 });

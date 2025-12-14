@@ -86,7 +86,7 @@ export interface Document {
 }
 
 export interface PDFConfig {
-  pageSize?: "A4" | "Letter" | "Legal";
+  pageSize?: "A4" | "A5" | "Letter" | "Legal";
   margins?: {
     top: number;
     bottom: number;
