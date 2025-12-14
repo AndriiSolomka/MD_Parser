@@ -201,7 +201,16 @@ export class MarkdownParserService {
       const indentLevel = Math.floor(
         (originalLine.length - originalLine.trimStart().length) / 2
       );
-      const text = unorderedMatch[2].trim();
+      const textLines = [unorderedMatch[2].trim()];
+
+      // Consume continuation lines
+      const continuationLines = this.consumeContinuationLines(
+        state,
+        indentLevel
+      );
+      textLines.push(...continuationLines);
+
+      const text = textLines.join(" ");
 
       state.addToken({
         type: TokenType.LIST_ITEM,
@@ -221,7 +230,16 @@ export class MarkdownParserService {
       const indentLevel = Math.floor(
         (originalLine.length - originalLine.trimStart().length) / 2
       );
-      const text = orderedMatch[2].trim();
+      const textLines = [orderedMatch[2].trim()];
+
+      // Consume continuation lines
+      const continuationLines = this.consumeContinuationLines(
+        state,
+        indentLevel
+      );
+      textLines.push(...continuationLines);
+
+      const text = textLines.join(" ");
 
       state.addToken({
         type: TokenType.LIST_ITEM,
@@ -236,6 +254,71 @@ export class MarkdownParserService {
     }
 
     return false;
+  }
+
+  /**
+   * Consumes continuation lines for a list item.
+   * A continuation line is a line that:
+   * - Is not empty
+   * - Has proper indentation (at least 2 spaces for level 0, more for nested)
+   * - Is not another list item
+   * - Is not another block element (heading, code block, etc.)
+   */
+  private consumeContinuationLines(
+    state: ParserState,
+    listIndentLevel: number
+  ): string[] {
+    const continuationLines: string[] = [];
+    const minIndent = (listIndentLevel + 1) * 2; // Minimum indentation for continuation
+
+    // Peek ahead at the next lines
+    let peekIndex = 1;
+    while (state.currentLineIndex + peekIndex < state.lines.length) {
+      const nextLine = state.lines[state.currentLineIndex + peekIndex];
+      const trimmedNext = nextLine.trim();
+
+      // Stop at empty line
+      if (!trimmedNext) {
+        break;
+      }
+
+      // Calculate indentation
+      const leadingSpaces = nextLine.length - nextLine.trimStart().length;
+
+      // Check if this is another list item (at any level)
+      const isListItem = /^([*\-+]|\d+\.)\s/.test(trimmedNext);
+      if (isListItem) {
+        break;
+      }
+
+      // Check if this is another block element
+      const isHeading = /^#{1,6}\s/.test(trimmedNext);
+      const isCodeBlock = trimmedNext.startsWith("```");
+      const isBlockquote = trimmedNext.startsWith(">");
+      const isHorizontalRule = this.isHorizontalRule(trimmedNext);
+
+      if (isHeading || isCodeBlock || isBlockquote || isHorizontalRule) {
+        break;
+      }
+
+      // Check if properly indented for continuation
+      // For level 0, need at least 2 spaces
+      // For level 1, need at least 4 spaces, etc.
+      if (leadingSpaces >= minIndent) {
+        continuationLines.push(trimmedNext);
+        peekIndex++;
+      } else {
+        // Not properly indented, stop here
+        break;
+      }
+    }
+
+    // Advance the state by the number of continuation lines consumed
+    if (continuationLines.length > 0) {
+      state.advance(continuationLines.length);
+    }
+
+    return continuationLines;
   }
 
   private tryParseImage(state: ParserState, trimmed: string): boolean {
