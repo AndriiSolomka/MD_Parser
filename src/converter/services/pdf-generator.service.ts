@@ -173,35 +173,65 @@ export class PdfGeneratorService {
       return;
     }
 
+    const hiddenRanges = this.calculateHiddenRanges(text, formatting);
+    const sortedPoints = this.calculateSplitPoints(
+      text.length,
+      formatting,
+      hiddenRanges
+    );
+
+    for (let i = 0; i < sortedPoints.length - 1; i++) {
+      const start = sortedPoints[i];
+      const end = sortedPoints[i + 1];
+      if (start >= end) continue;
+
+      if (this.isHidden(start, end, hiddenRanges)) continue;
+
+      const segmentText = text.substring(start, end);
+      const activeFormats = formatting.filter(
+        (f) => f.start <= start && f.end >= end
+      );
+      const styles = this.resolveStyles(activeFormats);
+
+      this.applyStyles(doc, styles);
+
+      const isLastSegment = i === sortedPoints.length - 2;
+
+      doc.text(segmentText, {
+        continued: !isLastSegment,
+        link: styles.link || null,
+        underline: !!styles.link,
+      });
+
+      if (!isLastSegment && styles.link) {
+        this.handleLinkBleeding(
+          doc,
+          text,
+          sortedPoints,
+          i,
+          formatting,
+          styles.link
+        );
+      }
+    }
+
+    doc.font("Helvetica").fillColor("#000000").text(" ", { continued: false });
+  }
+
+  private calculateHiddenRanges(
+    text: string,
+    formatting: InlineFormat[]
+  ): { start: number; end: number }[] {
     const hiddenRanges: { start: number; end: number }[] = [];
 
     formatting.forEach((f) => {
       const sub = text.substring(f.start, f.end);
       if (f.type === "bold-italic") {
-        // Triple emphasis: *** or ___
-        if (sub.startsWith("***")) {
-          hiddenRanges.push({ start: f.start, end: f.start + 3 });
-          hiddenRanges.push({ start: f.end - 3, end: f.end });
-        } else if (sub.startsWith("___")) {
-          hiddenRanges.push({ start: f.start, end: f.start + 3 });
-          hiddenRanges.push({ start: f.end - 3, end: f.end });
-        }
+        this.addHiddenRangesForEmphasis(hiddenRanges, f, sub, "***", "___", 3);
       } else if (f.type === "bold") {
-        if (sub.startsWith("**")) {
-          hiddenRanges.push({ start: f.start, end: f.start + 2 });
-          hiddenRanges.push({ start: f.end - 2, end: f.end });
-        } else if (sub.startsWith("__")) {
-          hiddenRanges.push({ start: f.start, end: f.start + 2 });
-          hiddenRanges.push({ start: f.end - 2, end: f.end });
-        }
+        this.addHiddenRangesForEmphasis(hiddenRanges, f, sub, "**", "__", 2);
       } else if (f.type === "italic") {
-        if (sub.startsWith("*")) {
-          hiddenRanges.push({ start: f.start, end: f.start + 1 });
-          hiddenRanges.push({ start: f.end - 1, end: f.end });
-        } else if (sub.startsWith("_")) {
-          hiddenRanges.push({ start: f.start, end: f.start + 1 });
-          hiddenRanges.push({ start: f.end - 1, end: f.end });
-        }
+        this.addHiddenRangesForEmphasis(hiddenRanges, f, sub, "*", "_", 1);
       } else if (f.type === "code") {
         if (sub.startsWith("`")) {
           hiddenRanges.push({ start: f.start, end: f.start + 1 });
@@ -217,21 +247,6 @@ export class PdfGeneratorService {
       }
     });
 
-    // Handle overlapping bold and italic (triple emphasis)
-    // If we have both bold and italic starting at the same position and text starts with ***,
-    // we need to ensure we hide 3 characters, not just 2 (bold) or 1 (italic).
-    // The individual hiding above might overlap (0-2 and 0-1), which is fine,
-    // but we need to make sure 0-3 is covered if it's triple emphasis.
-    // However, since we mapped *** to bold and italic on the SAME range,
-    // bold will hide 0-2, italic will hide 0-1.
-    // The 3rd character (index 2) is covered by bold (0-2 covers 0, 1). Wait.
-    // substring(0, 2) is chars at 0 and 1.
-    // So bold hides 0 and 1.
-    // Italic hides 0.
-    // Char at 2 is visible.
-    // We need to hide char at 2.
-    // So we need to detect this case.
-
     formatting.forEach((f1) => {
       if (f1.type === "bold") {
         const f2 = formatting.find(
@@ -239,18 +254,44 @@ export class PdfGeneratorService {
         );
         if (f2) {
           const sub = text.substring(f1.start, f1.end);
-          if (sub.startsWith("***")) {
-            hiddenRanges.push({ start: f1.start, end: f1.start + 3 });
-            hiddenRanges.push({ start: f1.end - 3, end: f1.end });
-          } else if (sub.startsWith("___")) {
-            hiddenRanges.push({ start: f1.start, end: f1.start + 3 });
-            hiddenRanges.push({ start: f1.end - 3, end: f1.end });
-          }
+          this.addHiddenRangesForEmphasis(
+            hiddenRanges,
+            f1,
+            sub,
+            "***",
+            "___",
+            3
+          );
         }
       }
     });
 
-    const points = new Set<number>([0, text.length]);
+    return hiddenRanges;
+  }
+
+  private addHiddenRangesForEmphasis(
+    hiddenRanges: { start: number; end: number }[],
+    f: InlineFormat,
+    sub: string,
+    marker1: string,
+    marker2: string,
+    length: number
+  ) {
+    if (sub.startsWith(marker1)) {
+      hiddenRanges.push({ start: f.start, end: f.start + length });
+      hiddenRanges.push({ start: f.end - length, end: f.end });
+    } else if (sub.startsWith(marker2)) {
+      hiddenRanges.push({ start: f.start, end: f.start + length });
+      hiddenRanges.push({ start: f.end - length, end: f.end });
+    }
+  }
+
+  private calculateSplitPoints(
+    textLength: number,
+    formatting: InlineFormat[],
+    hiddenRanges: { start: number; end: number }[]
+  ): number[] {
+    const points = new Set<number>([0, textLength]);
     formatting.forEach((f) => {
       points.add(f.start);
       points.add(f.end);
@@ -259,66 +300,51 @@ export class PdfGeneratorService {
       points.add(r.start);
       points.add(r.end);
     });
+    return Array.from(points).sort((a, b) => a - b);
+  }
 
-    const sortedPoints = Array.from(points).sort((a, b) => a - b);
+  private isHidden(
+    start: number,
+    end: number,
+    hiddenRanges: { start: number; end: number }[]
+  ): boolean {
+    return hiddenRanges.some((r) => start >= r.start && end <= r.end);
+  }
 
-    for (let i = 0; i < sortedPoints.length - 1; i++) {
-      const start = sortedPoints[i];
-      const end = sortedPoints[i + 1];
-      if (start >= end) continue;
+  private resolveStyles(activeFormats: InlineFormat[]) {
+    return {
+      bold: activeFormats.some(
+        (f) => f.type === "bold" || f.type === "bold-italic"
+      ),
+      italic: activeFormats.some(
+        (f) => f.type === "italic" || f.type === "bold-italic"
+      ),
+      code: activeFormats.some((f) => f.type === "code"),
+      link: activeFormats.find((f) => f.type === "link")?.url,
+    };
+  }
 
-      const isHidden = hiddenRanges.some(
-        (r) => start >= r.start && end <= r.end
+  private handleLinkBleeding(
+    doc: PDFKit.PDFDocument,
+    text: string,
+    sortedPoints: number[],
+    currentIndex: number,
+    formatting: InlineFormat[],
+    currentLink: string
+  ) {
+    const nextStart = sortedPoints[currentIndex + 1];
+    const nextEnd = sortedPoints[currentIndex + 2];
+
+    if (nextStart < text.length && nextEnd <= text.length) {
+      const nextActiveFormats = formatting.filter(
+        (f) => f.start <= nextStart && f.end >= nextEnd
       );
-      if (isHidden) continue;
+      const hasNextLink = nextActiveFormats.some((f) => f.type === "link");
 
-      const segmentText = text.substring(start, end);
-
-      const activeFormats = formatting.filter(
-        (f) => f.start <= start && f.end >= end
-      );
-      const styles = {
-        bold: activeFormats.some(
-          (f) => f.type === "bold" || f.type === "bold-italic"
-        ),
-        italic: activeFormats.some(
-          (f) => f.type === "italic" || f.type === "bold-italic"
-        ),
-        code: activeFormats.some((f) => f.type === "code"),
-        link: activeFormats.find((f) => f.type === "link")?.url,
-      };
-
-      this.applyStyles(doc, styles);
-
-      const isLastSegment = i === sortedPoints.length - 2;
-
-      doc.text(segmentText, {
-        continued: !isLastSegment,
-        link: styles.link || null,
-        underline: !!styles.link,
-      });
-
-      // Reset link state between segments if the next segment doesn't have a link
-      // This prevents link bleeding into subsequent text
-      if (!isLastSegment && styles.link) {
-        const nextStart = sortedPoints[i + 1];
-        const nextEnd = sortedPoints[i + 2];
-
-        if (nextStart < text.length && nextEnd <= text.length) {
-          const nextActiveFormats = formatting.filter(
-            (f) => f.start <= nextStart && f.end >= nextEnd
-          );
-          const hasNextLink = nextActiveFormats.some((f) => f.type === "link");
-
-          if (!hasNextLink) {
-            // Close the link annotation by appending empty text without link
-            doc.text("", { continued: true, link: null });
-          }
-        }
+      if (!hasNextLink) {
+        doc.text("", { continued: true, link: null });
       }
     }
-
-    doc.font("Helvetica").fillColor("#000000").text(" ", { continued: false });
   }
 
   private applyStyles(
@@ -357,7 +383,6 @@ export class PdfGeneratorService {
       const level = item.level;
       if (!counters.has(level)) counters.set(level, 1);
 
-      // Reset deeper levels
       for (const k of counters.keys()) {
         if (k > level) counters.delete(k);
       }
@@ -443,9 +468,86 @@ export class PdfGeneratorService {
     const tableWidth =
       doc.page.width - config.margins!.left - config.margins!.right;
     const colCount = element.headers.length || element.rows[0]?.length || 0;
-    const minRowHeight = 25;
     const cellPadding = 5;
 
+    const finalColWidths = this.calculateColumnWidths(
+      doc,
+      element,
+      config,
+      colCount,
+      tableWidth,
+      cellPadding
+    );
+
+    let startY = doc.y;
+
+    let totalTableHeight = 0;
+    if (element.headers.length > 0) {
+      doc.font("Helvetica-Bold").fontSize(config.fontSize!);
+      totalTableHeight += this.calculateRowHeight(
+        doc,
+        element.headers,
+        finalColWidths,
+        colCount,
+        cellPadding
+      );
+    }
+
+    doc.font("Helvetica").fontSize(config.fontSize!);
+    for (const row of element.rows) {
+      totalTableHeight += this.calculateRowHeight(
+        doc,
+        row,
+        finalColWidths,
+        colCount,
+        cellPadding
+      );
+    }
+
+    if (startY + totalTableHeight > doc.page.height - config.margins!.bottom) {
+      doc.addPage();
+      startY = doc.y;
+    }
+
+    if (element.headers.length > 0) {
+      startY = this.renderTableRow(
+        doc,
+        element.headers,
+        finalColWidths,
+        startY,
+        config,
+        cellPadding,
+        true,
+        element.alignment
+      );
+    }
+
+    for (const row of element.rows) {
+      startY = this.renderTableRow(
+        doc,
+        row,
+        finalColWidths,
+        startY,
+        config,
+        cellPadding,
+        false,
+        element.alignment
+      );
+    }
+
+    doc.y = startY;
+    doc.x = config.margins!.left;
+    doc.moveDown(1);
+  }
+
+  private calculateColumnWidths(
+    doc: PDFKit.PDFDocument,
+    element: TableElement,
+    config: PDFConfig,
+    colCount: number,
+    tableWidth: number,
+    cellPadding: number
+  ): number[] {
     const colWidths = new Array(colCount).fill(0);
 
     doc.font("Helvetica-Bold").fontSize(config.fontSize!);
@@ -472,120 +574,101 @@ export class PdfGeneratorService {
 
     const totalContentWidth = colWidths.reduce((sum, w) => sum + w, 0);
     const scaleFactor = tableWidth / totalContentWidth;
-    const finalColWidths = colWidths.map((w) => w * scaleFactor);
+    return colWidths.map((w) => w * scaleFactor);
+  }
 
-    let startY = doc.y;
+  private calculateRowHeight(
+    doc: PDFKit.PDFDocument,
+    cells: string[],
+    colWidths: number[],
+    colCount: number,
+    cellPadding: number
+  ): number {
+    const minRowHeight = 25;
+    let maxHeight = minRowHeight;
 
-    const calculateRowHeight = (cells: string[]): number => {
-      let maxHeight = minRowHeight;
+    for (let i = 0; i < cells.length; i++) {
+      if (i >= colCount) continue;
+      const width = colWidths[i];
+      const textHeight = doc.heightOfString(cells[i], {
+        width: width - cellPadding * 2,
+        align: "left",
+      });
+      const requiredHeight = textHeight + cellPadding * 2 + 4;
+      maxHeight = Math.max(maxHeight, requiredHeight);
+    }
 
-      for (let i = 0; i < cells.length; i++) {
-        if (i >= colCount) continue;
-        const width = finalColWidths[i];
-        const textHeight = doc.heightOfString(cells[i], {
-          width: width - cellPadding * 2,
-          align: "left",
-        });
-        const requiredHeight = textHeight + cellPadding * 2 + 4;
-        maxHeight = Math.max(maxHeight, requiredHeight);
-      }
+    return maxHeight;
+  }
 
-      return maxHeight;
-    };
+  private renderTableRow(
+    doc: PDFKit.PDFDocument,
+    cells: string[],
+    colWidths: number[],
+    startY: number,
+    config: PDFConfig,
+    cellPadding: number,
+    isHeader: boolean,
+    alignment?: ("left" | "center" | "right")[]
+  ): number {
+    const colCount = colWidths.length;
 
-    let totalTableHeight = 0;
-    if (element.headers.length > 0) {
+    if (isHeader) {
       doc.font("Helvetica-Bold").fontSize(config.fontSize!);
-      totalTableHeight += calculateRowHeight(element.headers);
+    } else {
+      doc.font("Helvetica").fontSize(config.fontSize!);
     }
 
-    doc.font("Helvetica").fontSize(config.fontSize!);
-    for (const row of element.rows) {
-      totalTableHeight += calculateRowHeight(row);
-    }
-
-    if (startY + totalTableHeight > doc.page.height - config.margins!.bottom) {
-      doc.addPage();
-      startY = doc.y;
-    }
+    const rowHeight = this.calculateRowHeight(
+      doc,
+      cells,
+      colWidths,
+      colCount,
+      cellPadding
+    );
 
     const getColX = (index: number) => {
       let x = config.margins!.left;
       for (let i = 0; i < index; i++) {
-        x += finalColWidths[i];
+        x += colWidths[i];
       }
       return x;
     };
 
-    if (element.headers.length > 0) {
-      const headerHeight = calculateRowHeight(element.headers);
+    for (let i = 0; i < cells.length; i++) {
+      if (i >= colCount) break;
 
-      for (let i = 0; i < element.headers.length; i++) {
-        const x = getColX(i);
-        const width = finalColWidths[i];
+      const x = getColX(i);
+      const width = colWidths[i];
 
-        doc.rect(x, startY, width, headerHeight).fill("#f0f0f0");
-
-        doc.rect(x, startY, width, headerHeight).stroke("#cccccc");
-
+      if (isHeader) {
+        doc.rect(x, startY, width, rowHeight).fill("#f0f0f0");
+        doc.rect(x, startY, width, rowHeight).stroke("#cccccc");
         doc
           .fillColor("#000000")
           .font("Helvetica-Bold")
           .fontSize(config.fontSize!);
-
-        const alignment = element.alignment?.[i] || "left";
-
-        const currentY = doc.y;
-
-        doc.text(element.headers[i], x + cellPadding, startY + cellPadding, {
-          width: width - cellPadding * 2,
-          align: alignment,
-          lineBreak: true,
-          height: headerHeight - cellPadding * 2,
-          ellipsis: false,
-          continued: false,
-        });
-
-        doc.y = currentY;
-      }
-
-      startY += headerHeight;
-    }
-
-    for (const row of element.rows) {
-      const rowHeight = calculateRowHeight(row);
-
-      for (let i = 0; i < row.length; i++) {
-        const x = getColX(i);
-        const width = finalColWidths[i];
-
+      } else {
         doc.rect(x, startY, width, rowHeight).stroke("#cccccc");
-
         doc.fillColor("#000000").font("Helvetica").fontSize(config.fontSize!);
-
-        const alignment = element.alignment?.[i] || "left";
-
-        const currentY = doc.y;
-
-        doc.text(row[i], x + cellPadding, startY + cellPadding, {
-          width: width - cellPadding * 2,
-          align: alignment,
-          lineBreak: true,
-          height: rowHeight - cellPadding * 2,
-          ellipsis: false,
-          continued: false,
-        });
-
-        doc.y = currentY;
       }
 
-      startY += rowHeight;
+      const align = alignment?.[i] || "left";
+      const currentY = doc.y;
+
+      doc.text(cells[i], x + cellPadding, startY + cellPadding, {
+        width: width - cellPadding * 2,
+        align: align,
+        lineBreak: true,
+        height: rowHeight - cellPadding * 2,
+        ellipsis: false,
+        continued: false,
+      });
+
+      doc.y = currentY;
     }
 
-    doc.y = startY;
-
-    doc.x = config.margins!.left;
-    doc.moveDown(1);
+    return startY + rowHeight;
   }
 
   private renderImage(

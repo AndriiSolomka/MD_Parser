@@ -196,106 +196,61 @@ export class MarkdownParserService {
     originalLine: string
   ): boolean {
     const unorderedMatch = trimmed.match(/^([*\-+])\s+(.+)$/);
-    if (unorderedMatch) {
-      state.flushParagraph(this.extractInlineFormatting.bind(this));
-      const indentLevel = Math.floor(
-        (originalLine.length - originalLine.trimStart().length) / 2
-      );
-      const textLines = [unorderedMatch[2].trim()];
-
-      // Consume continuation lines
-      const continuationLines = this.consumeContinuationLines(
-        state,
-        indentLevel
-      );
-      textLines.push(...continuationLines);
-
-      const text = textLines.join(" ");
-
-      state.addToken({
-        type: TokenType.LIST_ITEM,
-        ordered: false,
-        text,
-        level: indentLevel,
-        formatting: this.extractInlineFormatting(text),
-        line: state.currentLineIndex,
-      } as ListItemToken);
-      state.advance();
-      return true;
-    }
-
     const orderedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
-    if (orderedMatch) {
-      state.flushParagraph(this.extractInlineFormatting.bind(this));
-      const indentLevel = Math.floor(
-        (originalLine.length - originalLine.trimStart().length) / 2
-      );
-      const textLines = [orderedMatch[2].trim()];
 
-      // Consume continuation lines
-      const continuationLines = this.consumeContinuationLines(
-        state,
-        indentLevel
-      );
-      textLines.push(...continuationLines);
+    const match = unorderedMatch || orderedMatch;
+    if (!match) return false;
 
-      const text = textLines.join(" ");
+    state.flushParagraph(this.extractInlineFormatting.bind(this));
 
-      state.addToken({
-        type: TokenType.LIST_ITEM,
-        ordered: true,
-        text,
-        level: indentLevel,
-        formatting: this.extractInlineFormatting(text),
-        line: state.currentLineIndex,
-      } as ListItemToken);
-      state.advance();
-      return true;
-    }
+    const isOrdered = !!orderedMatch;
+    const textContent = match[2].trim();
+    const indentLevel = Math.floor(
+      (originalLine.length - originalLine.trimStart().length) / 2
+    );
 
-    return false;
+    const textLines = [textContent];
+
+    const continuationLines = this.consumeContinuationLines(state, indentLevel);
+    textLines.push(...continuationLines);
+
+    const text = textLines.join(" ");
+
+    state.addToken({
+      type: TokenType.LIST_ITEM,
+      ordered: isOrdered,
+      text,
+      level: indentLevel,
+      formatting: this.extractInlineFormatting(text),
+      line: state.currentLineIndex,
+    } as ListItemToken);
+    state.advance();
+    return true;
   }
 
-  /**
-   * Consumes continuation lines for a list item.
-   * A continuation line is a line that:
-   * - Is not empty
-   * - Has proper indentation (at least 2 spaces for level 0, more for nested)
-   * - Is not another list item
-   * - Is not another block element (heading, code block, etc.)
-   */
   private consumeContinuationLines(
     state: ParserState,
     listIndentLevel: number
   ): string[] {
     const continuationLines: string[] = [];
-    // Relaxed indentation check: just needs to be indented somewhat
-    // Standard Markdown requires 4 spaces, but we'll be more lenient to catch "lazy" continuations
-    // if they are at least indented to the text start of the list item.
-    // For "- Item", text starts at col 2. So 2 spaces is enough.
     const minIndent = (listIndentLevel + 1) * 2;
 
-    // Peek ahead at the next lines
     let peekIndex = 1;
     while (state.currentLineIndex + peekIndex < state.lines.length) {
       const nextLine = state.lines[state.currentLineIndex + peekIndex];
       const trimmedNext = nextLine.trim();
 
-      // Stop at empty line
       if (!trimmedNext) {
         break;
       }
 
-      // Calculate indentation
       const leadingSpaces = nextLine.length - nextLine.trimStart().length;
 
-      // Check if this is another list item (at any level)
       const isListItem = /^([*\-+]|\d+\.)\s/.test(trimmedNext);
       if (isListItem) {
         break;
       }
 
-      // Check if this is another block element
       const isHeading = /^#{1,6}\s/.test(trimmedNext);
       const isCodeBlock = trimmedNext.startsWith("```");
       const isBlockquote = trimmedNext.startsWith(">");
@@ -305,18 +260,14 @@ export class MarkdownParserService {
         break;
       }
 
-      // Check if properly indented for continuation
-      // We allow if it has at least the minimum indentation
       if (leadingSpaces >= minIndent) {
         continuationLines.push(trimmedNext);
         peekIndex++;
       } else {
-        // Not properly indented, stop here
         break;
       }
     }
 
-    // Advance the state by the number of continuation lines consumed
     if (continuationLines.length > 0) {
       state.advance(continuationLines.length);
     }
@@ -385,69 +336,26 @@ export class MarkdownParserService {
     const formats: InlineFormat[] = [];
     const excludedRanges: { start: number; end: number }[] = [];
 
-    // Helper to check if a range overlaps with excluded ranges
-    const isExcluded = (start: number, end: number): boolean => {
-      return excludedRanges.some(
-        (range) =>
-          (start >= range.start && start < range.end) ||
-          (end > range.start && end <= range.end) ||
-          (start <= range.start && end >= range.end)
+    const patterns = [
+      { regex: /\*\*\*(.+?)\*\*\*/g, type: ["bold", "italic"] },
+      { regex: /___(.+?)___/g, type: ["bold", "italic"] },
+      { regex: /\*\*(.+?)\*\*/g, type: "bold" },
+      { regex: /__(.+?)__/g, type: "bold" },
+      { regex: /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, type: "italic" },
+      { regex: /(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, type: "italic" },
+      { regex: /`([^`]+)`/g, type: "code" },
+    ];
+
+    for (const { regex, type } of patterns) {
+      this.extractPatternWithExclusion(
+        text,
+        regex,
+        type as any,
+        formats,
+        excludedRanges
       );
-    };
+    }
 
-    // Triple emphasis (***text*** or ___text___) - Bold + Italic combined
-    // We map this to BOTH bold and italic styles
-    this.extractPatternWithExclusion(
-      text,
-      /\*\*\*(.+?)\*\*\*/g,
-      ["bold", "italic"],
-      formats,
-      excludedRanges
-    );
-    this.extractPatternWithExclusion(
-      text,
-      /___(.+?)___/g,
-      ["bold", "italic"],
-      formats,
-      excludedRanges
-    );
-
-    // Double emphasis (**text** or __text__) - Bold only
-    this.extractPatternWithExclusion(
-      text,
-      /\*\*(.+?)\*\*/g,
-      "bold",
-      formats,
-      excludedRanges
-    );
-    this.extractPatternWithExclusion(
-      text,
-      /__(.+?)__/g,
-      "bold",
-      formats,
-      excludedRanges
-    );
-
-    // Single emphasis (*text* or _text_) - Italic only
-    this.extractPatternWithExclusion(
-      text,
-      /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g,
-      "italic",
-      formats,
-      excludedRanges
-    );
-    this.extractPatternWithExclusion(
-      text,
-      /(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g,
-      "italic",
-      formats,
-      excludedRanges
-    );
-
-    // Code spans (`code`)
-    this.extractPattern(text, /`([^`]+)`/g, "code", formats);
-
-    // Links ([text](url))
     const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     let match;
     while ((match = linkRegex.exec(text)) !== null) {
@@ -474,67 +382,44 @@ export class MarkdownParserService {
     formats: InlineFormat[],
     excludedRanges: { start: number; end: number }[]
   ): void {
-    // Ensure global flag to prevent infinite loop
-    const safeRegex = new RegExp(
-      regex.source,
-      regex.flags.includes("g") ? regex.flags : regex.flags + "g"
-    );
+    const safeRegex = this.createSafeRegex(regex);
 
     let match;
     while ((match = safeRegex.exec(text)) !== null) {
       const start = match.index;
       const end = match.index + match[0].length;
 
-      // Check if this range overlaps with any excluded range
-      const isExcluded = excludedRanges.some(
-        (range) =>
-          (start >= range.start && start < range.end) ||
-          (end > range.start && end <= range.end) ||
-          (start <= range.start && end >= range.end)
-      );
-
-      if (!isExcluded) {
+      if (!this.isExcluded(start, end, excludedRanges)) {
         if (Array.isArray(type)) {
           type.forEach((t) => {
-            formats.push({
-              type: t,
-              start,
-              end,
-            });
+            formats.push({ type: t, start, end });
           });
         } else {
-          formats.push({
-            type,
-            start,
-            end,
-          });
+          formats.push({ type, start, end });
         }
-        // Add this range to excluded ranges for subsequent processing
         excludedRanges.push({ start, end });
       }
     }
   }
 
-  private extractPattern(
-    text: string,
-    regex: RegExp,
-    type: "bold" | "italic" | "bold-italic" | "code",
-    formats: InlineFormat[]
-  ): void {
-    // Ensure global flag to prevent infinite loop
-    const safeRegex = new RegExp(
+  private createSafeRegex(regex: RegExp): RegExp {
+    return new RegExp(
       regex.source,
       regex.flags.includes("g") ? regex.flags : regex.flags + "g"
     );
+  }
 
-    let match;
-    while ((match = safeRegex.exec(text)) !== null) {
-      formats.push({
-        type,
-        start: match.index,
-        end: match.index + match[0].length,
-      });
-    }
+  private isExcluded(
+    start: number,
+    end: number,
+    excludedRanges: { start: number; end: number }[]
+  ): boolean {
+    return excludedRanges.some(
+      (range) =>
+        (start >= range.start && start < range.end) ||
+        (end > range.start && end <= range.end) ||
+        (start <= range.start && end >= range.end)
+    );
   }
 
   private deduplicateFormats(formats: InlineFormat[]): InlineFormat[] {

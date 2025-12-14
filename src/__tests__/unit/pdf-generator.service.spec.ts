@@ -3,7 +3,12 @@ import { PdfGeneratorService } from "../../converter/services/pdf-generator.serv
 import { Document } from "../../converter/types/document";
 import * as fs from "fs";
 import * as path from "path";
-import { parsePdf, getPdfPageDimensions } from "../utils/pdf-test-helpers";
+import {
+  assertPdfContainsText,
+  assertPdfPageCount,
+  parsePdf,
+  getPdfPageDimensions,
+} from "../utils/pdf-test-helpers";
 
 describe("PdfGeneratorService", () => {
   let service: PdfGeneratorService;
@@ -61,8 +66,7 @@ describe("PdfGeneratorService", () => {
       await service.generate(doc, outputPath);
 
       expect(fs.existsSync(outputPath)).toBe(true);
-      const stats = fs.statSync(outputPath);
-      expect(stats.size).toBeGreaterThan(0);
+      await assertPdfContainsText(outputPath, "Test Heading");
     });
 
     it("should generate PDF with paragraph", async () => {
@@ -79,6 +83,10 @@ describe("PdfGeneratorService", () => {
       await service.generate(doc, outputPath);
 
       expect(fs.existsSync(outputPath)).toBe(true);
+      await assertPdfContainsText(
+        outputPath,
+        "This is a test paragraph with some content."
+      );
     });
 
     it("should generate PDF with list", async () => {
@@ -100,6 +108,7 @@ describe("PdfGeneratorService", () => {
       await service.generate(doc, outputPath);
 
       expect(fs.existsSync(outputPath)).toBe(true);
+      await assertPdfContainsText(outputPath, ["Item 1", "Item 2", "Item 3"]);
     });
 
     it("should generate PDF with code block", async () => {
@@ -117,6 +126,11 @@ describe("PdfGeneratorService", () => {
       await service.generate(doc, outputPath);
 
       expect(fs.existsSync(outputPath)).toBe(true);
+      await assertPdfContainsText(outputPath, [
+        "const x = 1;",
+        "const y = 2;",
+        "console.log(x + y);",
+      ]);
     });
 
     it("should generate PDF with table", async () => {
@@ -139,6 +153,20 @@ describe("PdfGeneratorService", () => {
       await service.generate(doc, outputPath);
 
       expect(fs.existsSync(outputPath)).toBe(true);
+      await assertPdfContainsText(outputPath, [
+        "Column 1",
+        "Column 2",
+        "Column 3",
+        "A1",
+        "B1",
+        "C1",
+        "A2",
+        "B2",
+        "C2",
+        "A3",
+        "B3",
+        "C3",
+      ]);
     });
 
     it("should generate PDF with blockquote", async () => {
@@ -155,6 +183,10 @@ describe("PdfGeneratorService", () => {
       await service.generate(doc, outputPath);
 
       expect(fs.existsSync(outputPath)).toBe(true);
+      await assertPdfContainsText(
+        outputPath,
+        "This is a famous quote from someone important."
+      );
     });
 
     it("should generate PDF with horizontal rule", async () => {
@@ -178,6 +210,7 @@ describe("PdfGeneratorService", () => {
       await service.generate(doc, outputPath);
 
       expect(fs.existsSync(outputPath)).toBe(true);
+      await assertPdfContainsText(outputPath, ["Before rule", "After rule"]);
     });
 
     it("should generate PDF with mixed content", async () => {
@@ -237,8 +270,19 @@ describe("PdfGeneratorService", () => {
       await service.generate(doc, outputPath);
 
       expect(fs.existsSync(outputPath)).toBe(true);
-      const stats = fs.statSync(outputPath);
-      expect(stats.size).toBeGreaterThan(1000); // Should be substantial
+      await assertPdfContainsText(outputPath, [
+        "Main Title",
+        "This is an introductory paragraph.",
+        "Section 1",
+        "First point",
+        "Second point",
+        "function hello()",
+        "Name",
+        "Age",
+        "Alice",
+        "25",
+        "A wise quote",
+      ]);
     });
 
     it("should respect custom page configuration", async () => {

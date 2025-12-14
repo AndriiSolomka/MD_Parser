@@ -121,7 +121,11 @@ export class DocumentConverterService {
     const ordered = (tokens[i] as ListItemToken).ordered;
 
     while (i < tokens.length && tokens[i].type === TokenType.LIST_ITEM) {
-      listItems.push(tokens[i] as ListItemToken);
+      const currentToken = tokens[i] as ListItemToken;
+      if (currentToken.ordered !== ordered) {
+        break;
+      }
+      listItems.push(currentToken);
       i++;
     }
 

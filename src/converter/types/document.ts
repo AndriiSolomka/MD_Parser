@@ -46,7 +46,7 @@ export interface ImageElement extends DocumentElement {
   type: "image";
   alt: string;
   url: string;
-  data?: Buffer; // Downloaded image data
+  data?: Buffer;
 }
 
 export interface BlockquoteElement extends DocumentElement {
