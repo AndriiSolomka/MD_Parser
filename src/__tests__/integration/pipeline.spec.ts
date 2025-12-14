@@ -27,16 +27,13 @@ describe("Integration: Full Pipeline Tests", () => {
   });
 
   afterAll(() => {
-    // Clean up test output
     if (fs.existsSync(testOutputDir)) {
       try {
         fs.readdirSync(testOutputDir).forEach((file) => {
           fs.unlinkSync(path.join(testOutputDir, file));
         });
         fs.rmdirSync(testOutputDir);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
+      } catch (_error) {}
     }
   });
 
@@ -55,14 +52,13 @@ This is a **simple** test with *formatting*.`;
     const stats = fs.statSync(outputPath);
     expect(stats.size).toBeGreaterThan(0);
 
-    // Verify PDF content
     await assertPdfContainsText(outputPath, [
       "Test Document",
       "simple",
       "test",
       "formatting",
     ]);
-    assertPdfFileSize(outputPath, 500); // At least 500 bytes
+    assertPdfFileSize(outputPath, 500);
   });
 
   it("should handle all markdown features in one document", async () => {
@@ -110,9 +106,8 @@ End.`;
 
     expect(fs.existsSync(outputPath)).toBe(true);
     const stats = fs.statSync(outputPath);
-    expect(stats.size).toBeGreaterThan(1000); // Should be substantial
+    expect(stats.size).toBeGreaterThan(1000);
 
-    // Verify PDF contains all expected content
     await assertPdfContainsText(outputPath, [
       "Main Title",
       "Subtitle",
@@ -145,7 +140,6 @@ End.`;
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
-    // Empty document should still produce a valid PDF
     assertPdfFileSize(outputPath, 100);
   });
 
@@ -159,7 +153,6 @@ End.`;
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
-    // Whitespace-only document should still produce a valid PDF
     assertPdfFileSize(outputPath, 100);
   });
 });

@@ -52,14 +52,12 @@ Comparison: **bold only**, *italic only*, and ***bold italic***.`;
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Parse the PDF and check it contains the text
     const pdfContent = await parsePdf(outputPath);
     expect(pdfContent.text).toContain("bold italic");
     expect(pdfContent.text).toContain("another bold italic");
     expect(pdfContent.text).toContain("bold only");
     expect(pdfContent.text).toContain("italic only");
 
-    // FIXED: Verify that markdown markers are NOT visible in the PDF
     expect(pdfContent.text).not.toContain("***");
     expect(pdfContent.text).not.toContain("___");
     expect(pdfContent.text).not.toContain("**");
@@ -71,7 +69,7 @@ Comparison: **bold only**, *italic only*, and ***bold italic***.`;
 
     expect(tokens).toHaveLength(1);
     const paragraph = tokens[0] as any;
-    expect(paragraph.formatting).toHaveLength(2); // bold + italic
+    expect(paragraph.formatting).toHaveLength(2);
 
     const types = paragraph.formatting.map((f: any) => f.type).sort();
     expect(types).toEqual(["bold", "italic"]);
@@ -83,16 +81,13 @@ Comparison: **bold only**, *italic only*, and ***bold italic***.`;
 
     const paragraph = tokens[0] as any;
 
-    // Should have exactly 4 formats (1 bold, 1 italic, 1 bold from triple, 1 italic from triple)
     expect(paragraph.formatting).toHaveLength(4);
 
-    // Check types
     const types = paragraph.formatting.map((f: any) => f.type).sort();
     expect(types).toEqual(["bold", "bold", "italic", "italic"]);
   });
 
   afterAll(() => {
-    // Keep generated PDFs for manual inspection
     console.log(`\nGenerated PDFs in: ${path.resolve(outputDir)}`);
   });
 });

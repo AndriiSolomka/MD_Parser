@@ -27,16 +27,13 @@ describe("Integration: Error Handling", () => {
   });
 
   afterAll(() => {
-    // Clean up test output
     if (fs.existsSync(testOutputDir)) {
       try {
         fs.readdirSync(testOutputDir).forEach((file) => {
           fs.unlinkSync(path.join(testOutputDir, file));
         });
         fs.rmdirSync(testOutputDir);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
+      } catch (_error) {}
     }
   });
 
@@ -53,7 +50,6 @@ describe("Integration: Error Handling", () => {
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // PDF should be generated even with malformed table
     assertPdfFileSize(outputPath, 100);
   });
 
@@ -72,7 +68,6 @@ function test() {
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify PDF contains the test content
     await assertPdfContainsText(outputPath, ["Test", "function test()"]);
   });
 
@@ -87,7 +82,6 @@ function test() {
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify formatted text is present
     await assertPdfContainsText(outputPath, [
       "Text with",
       "bold",
@@ -120,7 +114,6 @@ between content.`;
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify content is present despite excessive newlines
     await assertPdfContainsText(outputPath, [
       "Title",
       "With many",
@@ -144,10 +137,9 @@ between content.`;
     const stats = fs.statSync(outputPath);
     expect(stats.size).toBeGreaterThan(1000);
 
-    // Verify long text is present in PDF
     await assertPdfContainsText(outputPath, ["Long Text", "Lorem ipsum"]);
     const pdfText = await getPdfText(outputPath);
-    expect(pdfText.length).toBeGreaterThan(500); // Should contain substantial text
+    expect(pdfText.length).toBeGreaterThan(500);
   });
 
   it("should handle special characters in text", async () => {
@@ -167,7 +159,6 @@ Code with special: \`x < y && y > z\`
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify special characters are handled
     await assertPdfContainsText(outputPath, [
       "Special Characters",
       "Text with special chars",
@@ -192,7 +183,6 @@ Code with special: \`x < y && y > z\`
     expect(document.elements.length).toBe(6);
     expect(document.elements.every((el) => el.type === "heading")).toBe(true);
 
-    // Verify all headings are present
     await assertPdfContainsText(outputPath, [
       "H1",
       "H2",
@@ -222,7 +212,6 @@ Code with special: \`x < y && y > z\`
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify list items are present
     await assertPdfContainsText(outputPath, [
       "List with gaps",
       "Item 1",

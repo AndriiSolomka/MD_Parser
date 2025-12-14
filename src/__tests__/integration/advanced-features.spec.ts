@@ -30,16 +30,13 @@ describe("Integration: Advanced Markdown Features", () => {
   });
 
   afterAll(() => {
-    // Clean up test output
     if (fs.existsSync(testOutputDir)) {
       try {
         fs.readdirSync(testOutputDir).forEach((file) => {
           fs.unlinkSync(path.join(testOutputDir, file));
         });
         fs.rmdirSync(testOutputDir);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
+      } catch (_error) {}
     }
   });
 
@@ -69,7 +66,6 @@ describe("Integration: Advanced Markdown Features", () => {
     expect(fs.existsSync(outputPath)).toBe(true);
     expect(document.elements.length).toBeGreaterThan(0);
 
-    // Verify PDF contains all list items
     await assertPdfContainsText(outputPath, [
       "Nested Lists",
       "Level 1 item 1",
@@ -121,7 +117,6 @@ describe("Integration: Advanced Markdown Features", () => {
     const tables = document.elements.filter((el) => el.type === "table");
     expect(tables.length).toBe(3);
 
-    // Verify PDF contains table data
     await assertPdfContainsText(outputPath, [
       "Tables Test",
       "First Table",
@@ -190,7 +185,6 @@ Inline code: \`const x = 42;\``;
     );
     expect(codeBlocks.length).toBe(3);
 
-    // Verify PDF contains all code examples
     await assertPdfContainsText(outputPath, [
       "Code Examples",
       "JavaScript:",
@@ -224,7 +218,6 @@ Multiple \`inline\` code \`segments\` in **one** paragraph.`;
     expect(fs.existsSync(outputPath)).toBe(true);
     expect(document.elements.length).toBeGreaterThan(2);
 
-    // Verify PDF contains formatted text
     await assertPdfContainsText(outputPath, [
       "Formatting Test",
       "bold",
@@ -259,7 +252,6 @@ Multiple \`inline\` code \`segments\` in **one** paragraph.`;
     const quotes = document.elements.filter((el) => el.type === "blockquote");
     expect(quotes.length).toBeGreaterThan(0);
 
-    // Verify PDF contains quote content
     await assertPdfContainsText(outputPath, [
       "Quotes",
       "This is a simple quote",
@@ -308,7 +300,6 @@ Final section.`;
     );
     expect(rules.length).toBe(3);
 
-    // Verify PDF contains sections in order
     await assertPdfContainsHeadersInOrder(outputPath, [
       "Section 1",
       "Section 2",
@@ -340,7 +331,6 @@ Final section.`;
     const stats = fs.statSync(outputPath);
     expect(stats.size).toBeGreaterThan(5000);
 
-    // Verify PDF contains sample sections
     await assertPdfContainsText(outputPath, [
       "Large Document",
       "Section 1",
@@ -351,7 +341,6 @@ Final section.`;
       "List item 1",
       "List item 50",
     ]);
-    // Large document should span multiple pages
     await assertPdfMinPages(outputPath, 2);
   });
 
@@ -370,8 +359,6 @@ Final section.`;
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify PDF contains table headers and sample data
-    // Note: Large tables may span multiple pages
     await assertPdfContainsText(outputPath, [
       "Large Table",
       "Col1",
@@ -384,10 +371,8 @@ Final section.`;
       // Data30 may be on second page - check if it's in full text
     ]);
 
-    // Verify table data is present (may be split across pages)
     const fullText = await getPdfText(outputPath);
     expect(fullText).toContain("Data1");
     expect(fullText).toContain("Data15");
-    // Last row might be on another page or partially visible
   });
 });

@@ -27,16 +27,13 @@ describe("Integration: PDF Configuration Tests", () => {
   });
 
   afterAll(() => {
-    // Clean up test output
     if (fs.existsSync(testOutputDir)) {
       try {
         fs.readdirSync(testOutputDir).forEach((file) => {
           fs.unlinkSync(path.join(testOutputDir, file));
         });
         fs.rmdirSync(testOutputDir);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
+      } catch (_error) {}
     }
   });
 
@@ -60,7 +57,6 @@ describe("Integration: PDF Configuration Tests", () => {
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify PDF content
     await assertPdfContainsText(outputPath, "Test");
     assertPdfFileSize(outputPath, 500);
   });
@@ -71,7 +67,6 @@ describe("Integration: PDF Configuration Tests", () => {
     const tokens = parser.parse(markdown);
     const document = await converter.convert(tokens);
 
-    // A4
     const a4Path = path.join(testOutputDir, "pagesize-a4.pdf");
     await generator.generate(document, a4Path, { pageSize: "A4" });
     expect(fs.existsSync(a4Path)).toBe(true);
@@ -80,7 +75,6 @@ describe("Integration: PDF Configuration Tests", () => {
       "Testing different page sizes",
     ]);
 
-    // Letter
     const letterPath = path.join(testOutputDir, "pagesize-letter.pdf");
     await generator.generate(document, letterPath, { pageSize: "Letter" });
     expect(fs.existsSync(letterPath)).toBe(true);
@@ -89,7 +83,6 @@ describe("Integration: PDF Configuration Tests", () => {
       "Testing different page sizes",
     ]);
 
-    // Both PDFs should contain the same text but may differ in size
     const a4Data = await parsePdf(a4Path);
     const letterData = await parsePdf(letterPath);
     expect(a4Data.text).toContain("Page Size Test");
@@ -109,7 +102,6 @@ describe("Integration: PDF Configuration Tests", () => {
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify content is present
     await assertPdfContainsText(outputPath, [
       "Margins Test",
       "Testing custom margins",
@@ -127,7 +119,6 @@ describe("Integration: PDF Configuration Tests", () => {
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify content is present
     await assertPdfContainsText(outputPath, [
       "Font Size Test",
       "Testing custom font size",
@@ -147,7 +138,6 @@ describe("Integration: PDF Configuration Tests", () => {
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify content is present
     await assertPdfContainsText(outputPath, [
       "Minimal Margins",
       "Content with minimal margins",
@@ -166,7 +156,6 @@ describe("Integration: PDF Configuration Tests", () => {
 
     expect(fs.existsSync(outputPath)).toBe(true);
 
-    // Verify content is present
     await assertPdfContainsText(outputPath, [
       "Large Font",
       "Testing large font size for accessibility",

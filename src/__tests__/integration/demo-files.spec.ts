@@ -24,16 +24,13 @@ describe("Integration: Real-world Demo Files", () => {
   });
 
   afterAll(() => {
-    // Clean up test output
     if (fs.existsSync(testOutputDir)) {
       try {
         fs.readdirSync(testOutputDir).forEach((file) => {
           fs.unlinkSync(path.join(testOutputDir, file));
         });
         fs.rmdirSync(testOutputDir);
-      } catch (error) {
-        // Ignore cleanup errors
-      }
+      } catch (_error) {}
     }
   });
 
@@ -58,10 +55,9 @@ describe("Integration: Real-world Demo Files", () => {
         const stats = fs.statSync(outputPath);
         expect(stats.size).toBeGreaterThan(0);
 
-        // Verify PDF contains actual content (not just exists)
-        assertPdfFileSize(outputPath, 500); // At least 500 bytes
+        assertPdfFileSize(outputPath, 500);
         const pdfText = await getPdfText(outputPath);
-        expect(pdfText.length).toBeGreaterThan(10); // Should have some text content
+        expect(pdfText.length).toBeGreaterThan(10);
       });
     });
   } else {
