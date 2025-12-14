@@ -269,7 +269,11 @@ export class MarkdownParserService {
     listIndentLevel: number
   ): string[] {
     const continuationLines: string[] = [];
-    const minIndent = (listIndentLevel + 1) * 2; // Minimum indentation for continuation
+    // Relaxed indentation check: just needs to be indented somewhat
+    // Standard Markdown requires 4 spaces, but we'll be more lenient to catch "lazy" continuations
+    // if they are at least indented to the text start of the list item.
+    // For "- Item", text starts at col 2. So 2 spaces is enough.
+    const minIndent = (listIndentLevel + 1) * 2;
 
     // Peek ahead at the next lines
     let peekIndex = 1;
@@ -302,8 +306,7 @@ export class MarkdownParserService {
       }
 
       // Check if properly indented for continuation
-      // For level 0, need at least 2 spaces
-      // For level 1, need at least 4 spaces, etc.
+      // We allow if it has at least the minimum indentation
       if (leadingSpaces >= minIndent) {
         continuationLines.push(trimmedNext);
         peekIndex++;
@@ -393,18 +396,18 @@ export class MarkdownParserService {
     };
 
     // Triple emphasis (***text*** or ___text___) - Bold + Italic combined
-    // Process FIRST to avoid conflicts with double/single emphasis
+    // We map this to BOTH bold and italic styles
     this.extractPatternWithExclusion(
       text,
       /\*\*\*(.+?)\*\*\*/g,
-      "bold-italic",
+      ["bold", "italic"],
       formats,
       excludedRanges
     );
     this.extractPatternWithExclusion(
       text,
       /___(.+?)___/g,
-      "bold-italic",
+      ["bold", "italic"],
       formats,
       excludedRanges
     );
@@ -462,12 +465,23 @@ export class MarkdownParserService {
   private extractPatternWithExclusion(
     text: string,
     regex: RegExp,
-    type: "bold" | "italic" | "bold-italic" | "code",
+    type:
+      | "bold"
+      | "italic"
+      | "bold-italic"
+      | "code"
+      | ("bold" | "italic" | "bold-italic" | "code")[],
     formats: InlineFormat[],
     excludedRanges: { start: number; end: number }[]
   ): void {
+    // Ensure global flag to prevent infinite loop
+    const safeRegex = new RegExp(
+      regex.source,
+      regex.flags.includes("g") ? regex.flags : regex.flags + "g"
+    );
+
     let match;
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = safeRegex.exec(text)) !== null) {
       const start = match.index;
       const end = match.index + match[0].length;
 
@@ -480,11 +494,21 @@ export class MarkdownParserService {
       );
 
       if (!isExcluded) {
-        formats.push({
-          type,
-          start,
-          end,
-        });
+        if (Array.isArray(type)) {
+          type.forEach((t) => {
+            formats.push({
+              type: t,
+              start,
+              end,
+            });
+          });
+        } else {
+          formats.push({
+            type,
+            start,
+            end,
+          });
+        }
         // Add this range to excluded ranges for subsequent processing
         excludedRanges.push({ start, end });
       }
@@ -497,8 +521,14 @@ export class MarkdownParserService {
     type: "bold" | "italic" | "bold-italic" | "code",
     formats: InlineFormat[]
   ): void {
+    // Ensure global flag to prevent infinite loop
+    const safeRegex = new RegExp(
+      regex.source,
+      regex.flags.includes("g") ? regex.flags : regex.flags + "g"
+    );
+
     let match;
-    while ((match = regex.exec(text)) !== null) {
+    while ((match = safeRegex.exec(text)) !== null) {
       formats.push({
         type,
         start: match.index,

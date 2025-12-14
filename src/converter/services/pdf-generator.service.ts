@@ -217,6 +217,39 @@ export class PdfGeneratorService {
       }
     });
 
+    // Handle overlapping bold and italic (triple emphasis)
+    // If we have both bold and italic starting at the same position and text starts with ***,
+    // we need to ensure we hide 3 characters, not just 2 (bold) or 1 (italic).
+    // The individual hiding above might overlap (0-2 and 0-1), which is fine,
+    // but we need to make sure 0-3 is covered if it's triple emphasis.
+    // However, since we mapped *** to bold and italic on the SAME range,
+    // bold will hide 0-2, italic will hide 0-1.
+    // The 3rd character (index 2) is covered by bold (0-2 covers 0, 1). Wait.
+    // substring(0, 2) is chars at 0 and 1.
+    // So bold hides 0 and 1.
+    // Italic hides 0.
+    // Char at 2 is visible.
+    // We need to hide char at 2.
+    // So we need to detect this case.
+
+    formatting.forEach((f1) => {
+      if (f1.type === "bold") {
+        const f2 = formatting.find(
+          (f) => f.type === "italic" && f.start === f1.start && f.end === f1.end
+        );
+        if (f2) {
+          const sub = text.substring(f1.start, f1.end);
+          if (sub.startsWith("***")) {
+            hiddenRanges.push({ start: f1.start, end: f1.start + 3 });
+            hiddenRanges.push({ start: f1.end - 3, end: f1.end });
+          } else if (sub.startsWith("___")) {
+            hiddenRanges.push({ start: f1.start, end: f1.start + 3 });
+            hiddenRanges.push({ start: f1.end - 3, end: f1.end });
+          }
+        }
+      }
+    });
+
     const points = new Set<number>([0, text.length]);
     formatting.forEach((f) => {
       points.add(f.start);
@@ -259,7 +292,7 @@ export class PdfGeneratorService {
 
       doc.text(segmentText, {
         continued: true,
-        link: styles.link,
+        link: styles.link || null,
         underline: !!styles.link,
       });
     }
