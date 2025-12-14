@@ -177,7 +177,16 @@ export class PdfGeneratorService {
 
     formatting.forEach((f) => {
       const sub = text.substring(f.start, f.end);
-      if (f.type === "bold") {
+      if (f.type === "bold-italic") {
+        // Triple emphasis: *** or ___
+        if (sub.startsWith("***")) {
+          hiddenRanges.push({ start: f.start, end: f.start + 3 });
+          hiddenRanges.push({ start: f.end - 3, end: f.end });
+        } else if (sub.startsWith("___")) {
+          hiddenRanges.push({ start: f.start, end: f.start + 3 });
+          hiddenRanges.push({ start: f.end - 3, end: f.end });
+        }
+      } else if (f.type === "bold") {
         if (sub.startsWith("**")) {
           hiddenRanges.push({ start: f.start, end: f.start + 2 });
           hiddenRanges.push({ start: f.end - 2, end: f.end });
@@ -236,8 +245,12 @@ export class PdfGeneratorService {
         (f) => f.start <= start && f.end >= end
       );
       const styles = {
-        bold: activeFormats.some((f) => f.type === "bold"),
-        italic: activeFormats.some((f) => f.type === "italic"),
+        bold: activeFormats.some(
+          (f) => f.type === "bold" || f.type === "bold-italic"
+        ),
+        italic: activeFormats.some(
+          (f) => f.type === "italic" || f.type === "bold-italic"
+        ),
         code: activeFormats.some((f) => f.type === "code"),
         link: activeFormats.find((f) => f.type === "link")?.url,
       };

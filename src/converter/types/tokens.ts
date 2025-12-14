@@ -11,7 +11,7 @@ export enum TokenType {
 }
 
 export interface InlineFormat {
-  type: "bold" | "italic" | "code" | "link";
+  type: "bold" | "italic" | "bold-italic" | "code" | "link";
   start: number;
   end: number;
   url?: string;

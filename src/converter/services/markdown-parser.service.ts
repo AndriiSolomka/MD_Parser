@@ -297,30 +297,71 @@ export class MarkdownParserService {
 
   private extractInlineFormatting(text: string): InlineFormat[] {
     const formats: InlineFormat[] = [];
+    const excludedRanges: { start: number; end: number }[] = [];
 
-    this.extractPattern(text, /\*\*\*(.+?)\*\*\*/g, "bold", formats);
-    this.extractPattern(text, /___(.+?)___/g, "bold", formats);
+    // Helper to check if a range overlaps with excluded ranges
+    const isExcluded = (start: number, end: number): boolean => {
+      return excludedRanges.some(
+        (range) =>
+          (start >= range.start && start < range.end) ||
+          (end > range.start && end <= range.end) ||
+          (start <= range.start && end >= range.end)
+      );
+    };
 
-    this.extractPattern(text, /\*\*(.+?)\*\*/g, "bold", formats);
+    // Triple emphasis (***text*** or ___text___) - Bold + Italic combined
+    // Process FIRST to avoid conflicts with double/single emphasis
+    this.extractPatternWithExclusion(
+      text,
+      /\*\*\*(.+?)\*\*\*/g,
+      "bold-italic",
+      formats,
+      excludedRanges
+    );
+    this.extractPatternWithExclusion(
+      text,
+      /___(.+?)___/g,
+      "bold-italic",
+      formats,
+      excludedRanges
+    );
 
-    this.extractPattern(text, /__(.+?)__/g, "bold", formats);
+    // Double emphasis (**text** or __text__) - Bold only
+    this.extractPatternWithExclusion(
+      text,
+      /\*\*(.+?)\*\*/g,
+      "bold",
+      formats,
+      excludedRanges
+    );
+    this.extractPatternWithExclusion(
+      text,
+      /__(.+?)__/g,
+      "bold",
+      formats,
+      excludedRanges
+    );
 
-    this.extractPattern(
+    // Single emphasis (*text* or _text_) - Italic only
+    this.extractPatternWithExclusion(
       text,
       /(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g,
       "italic",
-      formats
+      formats,
+      excludedRanges
     );
-
-    this.extractPattern(
+    this.extractPatternWithExclusion(
       text,
       /(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g,
       "italic",
-      formats
+      formats,
+      excludedRanges
     );
 
+    // Code spans (`code`)
     this.extractPattern(text, /`([^`]+)`/g, "code", formats);
 
+    // Links ([text](url))
     const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     let match;
     while ((match = linkRegex.exec(text)) !== null) {
@@ -335,10 +376,42 @@ export class MarkdownParserService {
     return this.deduplicateFormats(formats);
   }
 
+  private extractPatternWithExclusion(
+    text: string,
+    regex: RegExp,
+    type: "bold" | "italic" | "bold-italic" | "code",
+    formats: InlineFormat[],
+    excludedRanges: { start: number; end: number }[]
+  ): void {
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const start = match.index;
+      const end = match.index + match[0].length;
+
+      // Check if this range overlaps with any excluded range
+      const isExcluded = excludedRanges.some(
+        (range) =>
+          (start >= range.start && start < range.end) ||
+          (end > range.start && end <= range.end) ||
+          (start <= range.start && end >= range.end)
+      );
+
+      if (!isExcluded) {
+        formats.push({
+          type,
+          start,
+          end,
+        });
+        // Add this range to excluded ranges for subsequent processing
+        excludedRanges.push({ start, end });
+      }
+    }
+  }
+
   private extractPattern(
     text: string,
     regex: RegExp,
-    type: "bold" | "italic" | "code",
+    type: "bold" | "italic" | "bold-italic" | "code",
     formats: InlineFormat[]
   ): void {
     let match;

@@ -60,7 +60,7 @@ export interface HorizontalRuleElement extends DocumentElement {
 }
 
 export interface InlineFormat {
-  type: "bold" | "italic" | "code" | "link";
+  type: "bold" | "italic" | "bold-italic" | "code" | "link";
   start: number;
   end: number;
   url?: string;

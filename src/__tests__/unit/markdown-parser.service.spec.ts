@@ -401,7 +401,12 @@ const x = 1;
       const tokens = service.parse(markdown);
 
       const paragraph = tokens[0] as any;
-      expect(paragraph.formatting.length).toBeGreaterThan(0);
+      expect(paragraph.formatting.length).toBe(1); // One "bold-italic" format
+
+      // Verify it's a bold-italic format
+      expect(paragraph.formatting[0].type).toBe("bold-italic");
+      expect(paragraph.formatting[0].start).toBe(8);
+      expect(paragraph.formatting[0].end).toBe(25);
     });
 
     it("should handle multiple formatting in same word", () => {
@@ -410,6 +415,57 @@ const x = 1;
 
       const paragraph = tokens[0] as any;
       expect(paragraph.formatting.length).toBe(3);
+    });
+
+    it("should handle triple underscore ___text___ as bold+italic", () => {
+      const markdown = "This is ___bold italic___ text";
+      const tokens = service.parse(markdown);
+
+      const paragraph = tokens[0] as any;
+      expect(paragraph.formatting.length).toBe(1); // One "bold-italic" format
+      expect(paragraph.formatting[0].type).toBe("bold-italic");
+    });
+
+    it("should differentiate between ** (bold), * (italic), and *** (both)", () => {
+      const markdown = "**bold** *italic* ***both***";
+      const tokens = service.parse(markdown);
+
+      const paragraph = tokens[0] as any;
+      expect(paragraph.formatting.length).toBe(3); // 1 bold, 1 italic, 1 bold-italic
+
+      const boldFormats = paragraph.formatting.filter(
+        (f: any) => f.type === "bold"
+      );
+      const italicFormats = paragraph.formatting.filter(
+        (f: any) => f.type === "italic"
+      );
+      const boldItalicFormats = paragraph.formatting.filter(
+        (f: any) => f.type === "bold-italic"
+      );
+
+      expect(boldFormats.length).toBe(1); // **bold**
+      expect(italicFormats.length).toBe(1); // *italic*
+      expect(boldItalicFormats.length).toBe(1); // ***both***
+    });
+
+    it("should handle mixed emphasis markers correctly", () => {
+      const markdown = "Mix of **bold**, *italic*, and ***bold-italic***";
+      const tokens = service.parse(markdown);
+
+      const paragraph = tokens[0] as any;
+      const boldCount = paragraph.formatting.filter(
+        (f: any) => f.type === "bold"
+      ).length;
+      const italicCount = paragraph.formatting.filter(
+        (f: any) => f.type === "italic"
+      ).length;
+      const boldItalicCount = paragraph.formatting.filter(
+        (f: any) => f.type === "bold-italic"
+      ).length;
+
+      expect(boldCount).toBe(1); // **bold**
+      expect(italicCount).toBe(1); // *italic*
+      expect(boldItalicCount).toBe(1); // ***bold-italic***
     });
 
     it("should handle list with + marker", () => {
