@@ -479,6 +479,18 @@ export class PdfGeneratorService {
       cellPadding
     );
 
+    if (config.onTableLayout) {
+      const totalWidth = finalColWidths.reduce((sum, width) => sum + width, 0);
+      config.onTableLayout({
+        pageWidth: doc.page.width,
+        availableWidth: tableWidth,
+        totalWidth,
+        margins: config.margins!,
+        columnWidths: [...finalColWidths],
+        headersCount: element.headers.length,
+      });
+    }
+
     let startY = doc.y;
 
     let totalTableHeight = 0;

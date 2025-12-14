@@ -1,6 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { PdfGeneratorService } from "../../converter/services/pdf-generator.service";
-import { Document } from "../../converter/types/document";
+import { Document, TableLayoutInfo } from "../../converter/types/document";
 import * as fs from "fs";
 import * as path from "path";
 import {
@@ -167,6 +167,40 @@ describe("PdfGeneratorService", () => {
         "B3",
         "C3",
       ]);
+    });
+
+    it("should report table layout spanning available width", async () => {
+      const doc: Document = {
+        elements: [
+          {
+            type: "table",
+            headers: ["H1", "H2", "H3"],
+            rows: [
+              ["R1C1", "R1C2", "R1C3"],
+              ["R2C1", "R2C2", "R2C3"],
+            ],
+            alignment: ["left", "center", "right"],
+          },
+        ],
+      };
+
+      const outputPath = path.join(testOutputDir, "table-layout-width.pdf");
+      const layouts: TableLayoutInfo[] = [];
+
+      await service.generate(doc, outputPath, {
+        onTableLayout: (info) => layouts.push(info),
+      });
+
+      expect(fs.existsSync(outputPath)).toBe(true);
+      expect(layouts.length).toBeGreaterThan(0);
+      const layout = layouts[0];
+      expect(layout.headersCount).toBe(3);
+      expect(layout.columnWidths.length).toBe(3);
+      expect(layout.totalWidth).toBeGreaterThan(0);
+      const tolerance = 1; // allow for floating point rounding
+      expect(
+        Math.abs(layout.availableWidth - layout.totalWidth)
+      ).toBeLessThanOrEqual(tolerance);
     });
 
     it("should generate PDF with blockquote", async () => {

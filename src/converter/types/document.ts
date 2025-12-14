@@ -99,4 +99,19 @@ export interface PDFConfig {
   pageNumberPosition?: "bottom-center" | "bottom-right" | "bottom-left";
   headerText?: string;
   footerText?: string;
+  onTableLayout?: (info: TableLayoutInfo) => void;
+}
+
+export interface TableLayoutInfo {
+  pageWidth: number;
+  availableWidth: number;
+  totalWidth: number;
+  margins: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  };
+  columnWidths: number[];
+  headersCount: number;
 }
