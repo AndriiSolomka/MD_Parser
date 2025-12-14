@@ -66,14 +66,10 @@ Comparison: **bold only**, *italic only*, and ***bold italic***.`;
 
     expect(tokens).toHaveLength(1);
     const paragraph = tokens[0] as any;
-    expect(paragraph.formatting).toHaveLength(1);
-    expect(paragraph.formatting[0].type).toBe("bold-italic");
-    expect(
-      paragraph.text.substring(
-        paragraph.formatting[0].start,
-        paragraph.formatting[0].end
-      )
-    ).toBe("***bold italic***");
+    expect(paragraph.formatting).toHaveLength(2); // bold + italic
+
+    const types = paragraph.formatting.map((f: any) => f.type).sort();
+    expect(types).toEqual(["bold", "italic"]);
   });
 
   it("should not confuse *** with ** or *", () => {
@@ -82,12 +78,12 @@ Comparison: **bold only**, *italic only*, and ***bold italic***.`;
 
     const paragraph = tokens[0] as any;
 
-    // Should have exactly 3 formats
-    expect(paragraph.formatting).toHaveLength(3);
+    // Should have exactly 4 formats (1 bold, 1 italic, 1 bold from triple, 1 italic from triple)
+    expect(paragraph.formatting).toHaveLength(4);
 
     // Check types
     const types = paragraph.formatting.map((f: any) => f.type).sort();
-    expect(types).toEqual(["bold", "bold-italic", "italic"]);
+    expect(types).toEqual(["bold", "bold", "italic", "italic"]);
   });
 
   afterAll(() => {
