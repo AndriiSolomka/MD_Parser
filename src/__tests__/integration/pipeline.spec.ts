@@ -3,6 +3,11 @@ import { DocumentConverterService } from "../../converter/services/document-conv
 import { PdfGeneratorService } from "../../converter/services/pdf-generator.service";
 import * as fs from "fs";
 import * as path from "path";
+import {
+  assertPdfContainsText,
+  assertPdfFileSize,
+  assertPdfMinPages,
+} from "../utils/pdf-test-helpers";
 
 describe("Integration: Full Pipeline Tests", () => {
   let parser: MarkdownParserService;
@@ -49,6 +54,15 @@ This is a **simple** test with *formatting*.`;
     expect(fs.existsSync(outputPath)).toBe(true);
     const stats = fs.statSync(outputPath);
     expect(stats.size).toBeGreaterThan(0);
+
+    // Verify PDF content
+    await assertPdfContainsText(outputPath, [
+      "Test Document",
+      "simple",
+      "test",
+      "formatting",
+    ]);
+    assertPdfFileSize(outputPath, 500); // At least 500 bytes
   });
 
   it("should handle all markdown features in one document", async () => {
@@ -97,6 +111,28 @@ End.`;
     expect(fs.existsSync(outputPath)).toBe(true);
     const stats = fs.statSync(outputPath);
     expect(stats.size).toBeGreaterThan(1000); // Should be substantial
+
+    // Verify PDF contains all expected content
+    await assertPdfContainsText(outputPath, [
+      "Main Title",
+      "Subtitle",
+      "bold",
+      "italic",
+      "code",
+      "Lists",
+      "Item 1",
+      "Item 2",
+      "First",
+      "Second",
+      "Code",
+      "function test()",
+      "return true",
+      "Table",
+      "Quote",
+      "This is a quote",
+      "End",
+    ]);
+    assertPdfFileSize(outputPath, 1000);
   });
 
   it("should handle empty document gracefully", async () => {
@@ -109,6 +145,8 @@ End.`;
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
+    // Empty document should still produce a valid PDF
+    assertPdfFileSize(outputPath, 100);
   });
 
   it("should handle document with only whitespace", async () => {
@@ -121,5 +159,7 @@ End.`;
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
+    // Whitespace-only document should still produce a valid PDF
+    assertPdfFileSize(outputPath, 100);
   });
 });

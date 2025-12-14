@@ -3,6 +3,7 @@ import { DocumentConverterService } from "../../converter/services/document-conv
 import { PdfGeneratorService } from "../../converter/services/pdf-generator.service";
 import * as fs from "fs";
 import * as path from "path";
+import { assertPdfFileSize, getPdfText } from "../utils/pdf-test-helpers";
 
 describe("Integration: Real-world Demo Files", () => {
   let parser: MarkdownParserService;
@@ -56,6 +57,11 @@ describe("Integration: Real-world Demo Files", () => {
         expect(fs.existsSync(outputPath)).toBe(true);
         const stats = fs.statSync(outputPath);
         expect(stats.size).toBeGreaterThan(0);
+
+        // Verify PDF contains actual content (not just exists)
+        assertPdfFileSize(outputPath, 500); // At least 500 bytes
+        const pdfText = await getPdfText(outputPath);
+        expect(pdfText.length).toBeGreaterThan(10); // Should have some text content
       });
     });
   } else {

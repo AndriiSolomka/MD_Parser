@@ -3,6 +3,11 @@ import { DocumentConverterService } from "../../converter/services/document-conv
 import { PdfGeneratorService } from "../../converter/services/pdf-generator.service";
 import * as fs from "fs";
 import * as path from "path";
+import {
+  assertPdfContainsText,
+  assertPdfFileSize,
+  getPdfText,
+} from "../utils/pdf-test-helpers";
 
 describe("Integration: Error Handling", () => {
   let parser: MarkdownParserService;
@@ -47,6 +52,9 @@ describe("Integration: Error Handling", () => {
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
+
+    // PDF should be generated even with malformed table
+    assertPdfFileSize(outputPath, 100);
   });
 
   it("should handle unclosed code block", async () => {
@@ -63,6 +71,9 @@ function test() {
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
+
+    // Verify PDF contains the test content
+    await assertPdfContainsText(outputPath, ["Test", "function test()"]);
   });
 
   it("should handle mixed nested formatting", async () => {
@@ -75,6 +86,15 @@ function test() {
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
+
+    // Verify formatted text is present
+    await assertPdfContainsText(outputPath, [
+      "Text with",
+      "bold",
+      "italic",
+      "combined",
+      "here",
+    ]);
   });
 
   it("should handle markdown with excessive newlines", async () => {
@@ -99,6 +119,14 @@ between content.`;
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
+
+    // Verify content is present despite excessive newlines
+    await assertPdfContainsText(outputPath, [
+      "Title",
+      "With many",
+      "empty lines",
+      "between content",
+    ]);
   });
 
   it("should handle very long paragraphs", async () => {
@@ -115,6 +143,11 @@ between content.`;
     expect(fs.existsSync(outputPath)).toBe(true);
     const stats = fs.statSync(outputPath);
     expect(stats.size).toBeGreaterThan(1000);
+
+    // Verify long text is present in PDF
+    await assertPdfContainsText(outputPath, ["Long Text", "Lorem ipsum"]);
+    const pdfText = await getPdfText(outputPath);
+    expect(pdfText.length).toBeGreaterThan(500); // Should contain substantial text
   });
 
   it("should handle special characters in text", async () => {
@@ -133,6 +166,12 @@ Code with special: \`x < y && y > z\`
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
+
+    // Verify special characters are handled
+    await assertPdfContainsText(outputPath, [
+      "Special Characters",
+      "Text with special chars",
+    ]);
   });
 
   it("should handle markdown with only headings", async () => {
@@ -152,6 +191,16 @@ Code with special: \`x < y && y > z\`
     expect(fs.existsSync(outputPath)).toBe(true);
     expect(document.elements.length).toBe(6);
     expect(document.elements.every((el) => el.type === "heading")).toBe(true);
+
+    // Verify all headings are present
+    await assertPdfContainsText(outputPath, [
+      "H1",
+      "H2",
+      "H3",
+      "H4",
+      "H5",
+      "H6",
+    ]);
   });
 
   it("should handle list with empty items", async () => {
@@ -172,5 +221,14 @@ Code with special: \`x < y && y > z\`
     await generator.generate(document, outputPath);
 
     expect(fs.existsSync(outputPath)).toBe(true);
+
+    // Verify list items are present
+    await assertPdfContainsText(outputPath, [
+      "List with gaps",
+      "Item 1",
+      "Item 3",
+      "First",
+      "Third",
+    ]);
   });
 });
