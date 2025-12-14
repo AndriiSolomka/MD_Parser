@@ -67,6 +67,8 @@ class ParserState {
 @Injectable()
 export class MarkdownParserService {
   private readonly logger = new Logger(MarkdownParserService.name);
+  private readonly inlineFormatter = (text: string) =>
+    this.extractInlineFormatting(text);
 
   parse(markdown: string): Token[] {
     if (!markdown || !markdown.trim()) {
@@ -84,32 +86,48 @@ export class MarkdownParserService {
       if (this.tryParseCodeBlock(state, trimmed)) continue;
 
       if (!trimmed) {
-        state.flushParagraph(this.extractInlineFormatting.bind(this));
+        this.flushParagraph(state);
         state.advance();
         continue;
       }
 
-      if (this.tryParseHorizontalRule(state, trimmed)) continue;
-      if (this.tryParseHeading(state, trimmed)) continue;
-      if (this.tryParseBlockquote(state, trimmed)) continue;
-      if (this.tryParseList(state, trimmed, line)) continue;
-      if (this.tryParseImage(state, trimmed)) continue;
-      if (this.tryParseTable(state, trimmed)) continue;
+      if (this.tryParseStructuralElements(state, trimmed, line)) continue;
 
       state.addToParagraph(line);
       state.advance();
     }
 
-    state.flushParagraph(this.extractInlineFormatting.bind(this));
+    this.flushParagraph(state);
 
     this.logger.debug(`Parsed ${state.tokens.length} tokens from markdown`);
     return state.tokens;
   }
 
+  private flushParagraph(state: ParserState) {
+    state.flushParagraph(this.inlineFormatter);
+  }
+
+  private tryParseStructuralElements(
+    state: ParserState,
+    trimmed: string,
+    originalLine: string
+  ): boolean {
+    const handlers: Array<() => boolean> = [
+      () => this.tryParseHorizontalRule(state, trimmed),
+      () => this.tryParseHeading(state, trimmed),
+      () => this.tryParseBlockquote(state, trimmed),
+      () => this.tryParseList(state, trimmed, originalLine),
+      () => this.tryParseImage(state, trimmed),
+      () => this.tryParseTable(state, trimmed),
+    ];
+
+    return handlers.some((handler) => handler());
+  }
+
   private tryParseCodeBlock(state: ParserState, trimmed: string): boolean {
     if (!trimmed.startsWith("```")) return false;
 
-    state.flushParagraph(this.extractInlineFormatting.bind(this));
+    this.flushParagraph(state);
 
     const language = trimmed.slice(3).trim() || null;
     const startLine = state.currentLineIndex;
@@ -146,7 +164,7 @@ export class MarkdownParserService {
   private tryParseHorizontalRule(state: ParserState, trimmed: string): boolean {
     if (!this.isHorizontalRule(trimmed)) return false;
 
-    state.flushParagraph(this.extractInlineFormatting.bind(this));
+    this.flushParagraph(state);
     state.addToken({
       type: TokenType.HORIZONTAL_RULE,
       line: state.currentLineIndex,
@@ -159,7 +177,7 @@ export class MarkdownParserService {
     const match = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (!match) return false;
 
-    state.flushParagraph(this.extractInlineFormatting.bind(this));
+    this.flushParagraph(state);
     const level = match[1].length as 1 | 2 | 3 | 4 | 5 | 6;
     const text = match[2].trim();
 
@@ -167,7 +185,7 @@ export class MarkdownParserService {
       type: TokenType.HEADING,
       level,
       text,
-      formatting: this.extractInlineFormatting(text),
+      formatting: this.inlineFormatter(text),
       line: state.currentLineIndex,
     } as HeadingToken);
     state.advance();
@@ -177,13 +195,13 @@ export class MarkdownParserService {
   private tryParseBlockquote(state: ParserState, trimmed: string): boolean {
     if (!trimmed.startsWith(">")) return false;
 
-    state.flushParagraph(this.extractInlineFormatting.bind(this));
+    this.flushParagraph(state);
     const text = trimmed.slice(1).trim();
 
     state.addToken({
       type: TokenType.BLOCKQUOTE,
       text,
-      formatting: this.extractInlineFormatting(text),
+      formatting: this.inlineFormatter(text),
       line: state.currentLineIndex,
     } as BlockquoteToken);
     state.advance();
@@ -201,7 +219,7 @@ export class MarkdownParserService {
     const match = unorderedMatch || orderedMatch;
     if (!match) return false;
 
-    state.flushParagraph(this.extractInlineFormatting.bind(this));
+    this.flushParagraph(state);
 
     const isOrdered = !!orderedMatch;
     const textContent = match[2].trim();
@@ -221,7 +239,7 @@ export class MarkdownParserService {
       ordered: isOrdered,
       text,
       level: indentLevel,
-      formatting: this.extractInlineFormatting(text),
+      formatting: this.inlineFormatter(text),
       line: state.currentLineIndex,
     } as ListItemToken);
     state.advance();
@@ -279,7 +297,7 @@ export class MarkdownParserService {
     const match = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (!match) return false;
 
-    state.flushParagraph(this.extractInlineFormatting.bind(this));
+    this.flushParagraph(state);
     state.addToken({
       type: TokenType.IMAGE,
       alt: match[1],

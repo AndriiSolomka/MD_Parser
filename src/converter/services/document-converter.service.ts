@@ -41,65 +41,10 @@ export class DocumentConverterService {
     }
 
     const elements: Element[] = [];
-    let i = 0;
+    let index = 0;
 
-    while (i < tokens.length) {
-      const token = tokens[i];
-
-      switch (token.type) {
-        case TokenType.HEADING:
-          elements.push(this.convertHeading(token as HeadingToken));
-          i++;
-          break;
-
-        case TokenType.PARAGRAPH:
-          elements.push(this.convertParagraph(token as ParagraphToken));
-          i++;
-          break;
-
-        case TokenType.LIST_ITEM: {
-          const { element, nextIndex } = this.processList(tokens, i);
-          elements.push(element);
-          i = nextIndex;
-          break;
-        }
-
-        case TokenType.CODE_BLOCK:
-          elements.push(this.convertCodeBlock(token as CodeBlockToken));
-          i++;
-          break;
-
-        case TokenType.TABLE_ROW: {
-          const { element, nextIndex } = this.processTable(tokens, i);
-          elements.push(element);
-          i = nextIndex;
-          break;
-        }
-
-        case TokenType.IMAGE: {
-          const imageElement = await this.convertImage(
-            token as ImageToken,
-            baseDir
-          );
-          elements.push(imageElement);
-          i++;
-          break;
-        }
-
-        case TokenType.BLOCKQUOTE:
-          elements.push(this.convertBlockquote(token as BlockquoteToken));
-          i++;
-          break;
-
-        case TokenType.HORIZONTAL_RULE:
-          elements.push(this.convertHorizontalRule());
-          i++;
-          break;
-
-        default:
-          this.logger.warn(`Unknown token type: ${(token as Token).type}`);
-          i++;
-      }
+    while (index < tokens.length) {
+      index = await this.processToken(tokens, index, elements, baseDir);
     }
 
     this.logger.debug(
@@ -110,6 +55,62 @@ export class DocumentConverterService {
       elements,
       metadata: this.extractMetadata(elements),
     };
+  }
+
+  private async processToken(
+    tokens: Token[],
+    index: number,
+    elements: Element[],
+    baseDir?: string
+  ): Promise<number> {
+    const token = tokens[index];
+
+    switch (token.type) {
+      case TokenType.HEADING:
+        elements.push(this.convertHeading(token as HeadingToken));
+        return index + 1;
+
+      case TokenType.PARAGRAPH:
+        elements.push(this.convertParagraph(token as ParagraphToken));
+        return index + 1;
+
+      case TokenType.LIST_ITEM: {
+        const { element, nextIndex } = this.processList(tokens, index);
+        elements.push(element);
+        return nextIndex;
+      }
+
+      case TokenType.CODE_BLOCK:
+        elements.push(this.convertCodeBlock(token as CodeBlockToken));
+        return index + 1;
+
+      case TokenType.TABLE_ROW: {
+        const { element, nextIndex } = this.processTable(tokens, index);
+        elements.push(element);
+        return nextIndex;
+      }
+
+      case TokenType.IMAGE: {
+        const imageElement = await this.convertImage(
+          token as ImageToken,
+          baseDir
+        );
+        elements.push(imageElement);
+        return index + 1;
+      }
+
+      case TokenType.BLOCKQUOTE:
+        elements.push(this.convertBlockquote(token as BlockquoteToken));
+        return index + 1;
+
+      case TokenType.HORIZONTAL_RULE:
+        elements.push(this.convertHorizontalRule());
+        return index + 1;
+
+      default:
+        this.logger.warn(`Unknown token type: ${(token as Token).type}`);
+        return index + 1;
+    }
   }
 
   private processList(
@@ -172,16 +173,20 @@ export class DocumentConverterService {
   }
 
   private convertList(tokens: ListItemToken[], ordered: boolean): ListElement {
-    const items: ListItemElement[] = tokens.map((token) => ({
-      text: token.text,
-      level: token.level,
-      formatting: token.formatting,
-    }));
+    const items = tokens.map((token) => this.toListItemElement(token));
 
     return {
       type: "list",
       ordered,
       items,
+    };
+  }
+
+  private toListItemElement(token: ListItemToken): ListItemElement {
+    return {
+      text: token.text,
+      level: token.level,
+      formatting: token.formatting,
     };
   }
 

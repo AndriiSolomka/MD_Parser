@@ -45,27 +45,11 @@ export class PdfGeneratorService {
 
     return new Promise((resolve, reject) => {
       try {
-        const outputDir = path.dirname(outputPath);
-        if (outputDir && !fs.existsSync(outputDir)) {
-          fs.mkdirSync(outputDir, { recursive: true });
-        }
-
-        const doc = new PDFDocument({
-          size: finalConfig.pageSize,
-          margins: finalConfig.margins,
-          autoFirstPage: true,
-          bufferPages: true,
-          pdfVersion: "1.3",
-          info: {
-            Title: document.metadata?.title || "Document",
-            Author: document.metadata?.author || "",
-            Subject: document.metadata?.subject || "",
-            CreationDate: new Date(),
-          },
-        });
-
-        const writeStream = fs.createWriteStream(outputPath);
-        doc.pipe(writeStream);
+        const { doc, writeStream } = this.initializeDocument(
+          outputPath,
+          finalConfig,
+          document.metadata
+        );
 
         for (const element of document.elements) {
           this.renderElement(doc, element, finalConfig);
@@ -85,6 +69,40 @@ export class PdfGeneratorService {
         reject(error);
       }
     });
+  }
+
+  private initializeDocument(
+    outputPath: string,
+    config: PDFConfig,
+    metadata?: Document["metadata"]
+  ) {
+    this.ensureOutputDirectory(outputPath);
+
+    const doc = new PDFDocument({
+      size: config.pageSize,
+      margins: config.margins,
+      autoFirstPage: true,
+      bufferPages: true,
+      pdfVersion: "1.3",
+      info: {
+        Title: metadata?.title || "Document",
+        Author: metadata?.author || "",
+        Subject: metadata?.subject || "",
+        CreationDate: new Date(),
+      },
+    });
+
+    const writeStream = fs.createWriteStream(outputPath);
+    doc.pipe(writeStream);
+
+    return { doc, writeStream };
+  }
+
+  private ensureOutputDirectory(outputPath: string) {
+    const outputDir = path.dirname(outputPath);
+    if (outputDir && !fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
   }
 
   private renderElement(
@@ -432,9 +450,7 @@ export class PdfGeneratorService {
     const lineHeight = config.fontSize! * 1.2;
     const codeHeight = lines.length * lineHeight + 2 * padding;
 
-    if (doc.y + codeHeight > doc.page.height - config.margins!.bottom) {
-      doc.addPage();
-    }
+    this.ensureSpace(doc, config, codeHeight);
 
     const startY = doc.y;
 
@@ -516,10 +532,8 @@ export class PdfGeneratorService {
       );
     }
 
-    if (startY + totalTableHeight > doc.page.height - config.margins!.bottom) {
-      doc.addPage();
-      startY = doc.y;
-    }
+    this.ensureSpace(doc, config, totalTableHeight);
+    startY = doc.y;
 
     if (element.headers.length > 0) {
       startY = this.renderTableRow(
@@ -550,6 +564,17 @@ export class PdfGeneratorService {
     doc.y = startY;
     doc.x = config.margins!.left;
     doc.moveDown(1);
+  }
+
+  private ensureSpace(
+    doc: PDFKit.PDFDocument,
+    config: PDFConfig,
+    requiredHeight: number
+  ): void {
+    const bottomLimit = doc.page.height - config.margins!.bottom;
+    if (doc.y + requiredHeight > bottomLimit) {
+      doc.addPage();
+    }
   }
 
   private calculateColumnWidths(
