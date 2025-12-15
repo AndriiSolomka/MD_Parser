@@ -27,6 +27,8 @@ npm run test:cov
 npm run test:watch
 
 # Test all markdown files automatically
+# NOTE: This script is intended for **manual testing only**.
+# End-to-end (E2E) tests are not defined or required by the assignment conditions.
 ./test-all.sh
 ```
 
